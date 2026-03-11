@@ -1,4 +1,5 @@
 import os, re, requests
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 from datetime import datetime
@@ -36,8 +37,6 @@ class console:
     def input(self, message):
         return input(f"{self.colors['lightblack']}{self.timestamp()} » {self.colors['lightcyan']}INPUT   {self.colors['lightblack']}• {self.colors['white']}{message}{self.colors['reset']}")
 
-downloads_folder = "downloads"
-os.makedirs(downloads_folder, exist_ok=True)
 log = console()
 log.clear()
 
@@ -65,7 +64,7 @@ def download_file(download_url, output_path):
         ) as bar:
             for data in response.iter_content(block_size):
                 f.write(data)
-                bar.set_description(f"{log.colors['lightblack']}{log.timestamp()} » {log.colors['lightblue']}INFO {log.colors['lightblack']}• {log.colors['white']}Downloading -> {output_path[:15]}...{output_path[55:]} {log.colors['reset']}")
+                bar.set_description(f"{log.colors['lightblack']}{log.timestamp()} » {log.colors['lightblue']}INFO {log.colors['lightblack']}• {log.colors['white']}Downloading -> {os.path.basename(output_path)[:55]} {log.colors['reset']}")
                 bar.update(len(data))
 
         log.success(f"Successfully Downloaded File", F"{output_path[:35]}...{output_path[55:]}")
@@ -83,6 +82,16 @@ def remove_link(processed_link, input_file='input.txt'):
 
 with open('input.txt', 'r') as file:
     links = [line.strip() for line in file if line.strip()]
+
+if not links:
+    log.warning("input.txt is empty", "add links and rerun")
+    raise SystemExit(1)
+
+fragment = urlparse(links[0]).fragment
+game_name = fragment.split("--")[0].strip("_") if fragment else "unknown_game"
+downloads_folder = os.path.join("downloads", game_name)
+os.makedirs(downloads_folder, exist_ok=True)
+log.info("Download folder", downloads_folder)
 
 for link in links:
     log.info(f"Started Processing", f"{link[:30]}...{link[60:]}")

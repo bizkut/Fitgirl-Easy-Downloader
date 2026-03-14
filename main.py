@@ -87,7 +87,8 @@ if not links:
     log.warning("input.txt is empty", "add links and rerun")
     raise SystemExit(1)
 
-fragment = urlparse(links[0]).fragment
+first_game_link = next((l for l in links if "fitgirl-repacks.site" in urlparse(l).fragment), None)
+fragment = urlparse(first_game_link).fragment if first_game_link else ""
 game_name = fragment.split("--")[0].strip("_") if fragment else "unknown_game"
 downloads_folder = os.path.join("downloads", game_name)
 os.makedirs(downloads_folder, exist_ok=True)

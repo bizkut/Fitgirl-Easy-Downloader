@@ -146,11 +146,14 @@ class FitGirlDownloaderApp:
         self.lbl_size = ttk.Label(self.info_frame, text="Size: -")
         self.lbl_size.grid(row=4, column=1, sticky=tk.W)
         
-        self.btn_queue = ttk.Button(self.info_frame, text="Add to Queue", command=self.add_to_queue, state=tk.DISABLED)
-        self.btn_queue.grid(row=5, column=1, sticky=tk.W, pady=(5, 0))
+        btn_actions_frame = ttk.Frame(self.info_frame)
+        btn_actions_frame.grid(row=5, column=1, sticky=tk.W, pady=(5, 0))
         
-        self.btn_torrent = ttk.Button(self.info_frame, text="Download via Torrent", command=self.download_torrent, state=tk.DISABLED)
-        self.btn_torrent.grid(row=5, column=1, sticky=tk.W, padx=(90, 0), pady=(5, 0))
+        self.btn_queue = ttk.Button(btn_actions_frame, text="Add to Queue", command=self.add_to_queue, state=tk.DISABLED)
+        self.btn_queue.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.btn_torrent = ttk.Button(btn_actions_frame, text="Download via Torrent", command=self.download_torrent, state=tk.DISABLED)
+        self.btn_torrent.pack(side=tk.LEFT)
 
         self.txt_desc = tk.Text(self.info_frame, wrap=tk.WORD, height=4, width=40, font=('Helvetica', 9))
         self.txt_desc.grid(row=6, column=0, columnspan=3, pady=(10, 0), sticky=tk.EW)

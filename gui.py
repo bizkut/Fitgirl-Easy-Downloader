@@ -327,6 +327,15 @@ class FitGirlDownloaderApp:
             item_id = selected[0]
             self.progress_frame.pack(side=tk.BOTTOM, fill=tk.X)
             
+            # Immediately refresh statuses to show detailed info for selected item
+            if item_id in self.torrent_queue_items:
+                # Torrent polling will pick it up in next tick (max 500ms)
+                pass
+            elif item_id in self.queue_items:
+                # For regular items, we can force a status text update if needed
+                # but currently they are already fairly simple.
+                pass
+            
             # Check if it's a torrent item
             if item_id in self.torrent_queue_items:
                 torrent_info = self.torrent_queue_items[item_id]
@@ -858,16 +867,20 @@ class FitGirlDownloaderApp:
                 torrent_info['display_name'] = f"🧲 {status['name']}"
                 self.queue_tree.set(tree_id, 'name', torrent_info['display_name'])
 
+            # Check if this item is currently selected
+            selected = self.queue_tree.selection()
+            is_selected = (selected and selected[0] == tree_id)
+            
             # Build status string
             if status['is_paused'] and not status['is_seeding']:
-                status_str = f"⏸ Paused — {status['progress']:.1f}%"
+                status_str = f"⏸ Paused — {status['progress']:.1f}%" if is_selected else "⏸ Paused"
             elif status['is_seeding']:
                 ratio = status['seed_ratio']
                 up_speed = self._format_speed(status['upload_rate'])
                 if status['is_paused']:
-                    status_str = f"✅ Done — Seeded {ratio:.2f}x"
+                    status_str = f"✅ Done — Seeded {ratio:.2f}x" if is_selected else "✅ Finished"
                 else:
-                    status_str = f"🌱 Seeding {ratio:.2f}x — ↑ {up_speed}"
+                    status_str = f"🌱 Seeding {ratio:.2f}x — ↑ {up_speed}" if is_selected else "🌱 Seeding"
             elif not status['has_metadata']:
                 status_str = "🔍 Fetching metadata..."
             else:
@@ -875,7 +888,10 @@ class FitGirlDownloaderApp:
                 progress = status['progress']
                 peers = status['num_peers']
                 eta_str = self._format_eta(status['eta'])
-                status_str = f"↓ {dl_speed} — {progress:.1f}% — {peers} peers — ETA {eta_str}"
+                if is_selected:
+                    status_str = f"↓ {dl_speed} — {progress:.1f}% — {peers} peers — ETA {eta_str}"
+                else:
+                    status_str = f"Downloading {progress:.1f}%"
 
             torrent_info['display_status'] = status_str
             self.queue_tree.set(tree_id, 'status', status_str)

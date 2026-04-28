@@ -38,8 +38,7 @@ soup = BeautifulSoup(r.text, "html.parser")
 
 links = [
     a["href"]
-    for dlinks_div in soup.find_all("div", class_="dlinks")
-    for a in dlinks_div.find_all("a", href=True)
+    for a in soup.find_all("a", href=True)
     if a["href"].startswith("https://fuckingfast.co/")
 ]
 if not links:

@@ -8,6 +8,7 @@ import re
 import time
 import requests
 import webbrowser
+import shutil
 from io import BytesIO
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
@@ -252,8 +253,27 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
-            if self.queue_items[item_id]['status'] == 'Downloading':
+            item = self.queue_items[item_id]
+            
+            if item['status'] == 'Downloading':
                 self.abort_flag = True
+            
+            # Wait briefly if downloading to release file locks before deleting
+            def delete_files():
+                if item['status'] == 'Downloading':
+                    time.sleep(1) 
+                game_name = item['name']
+                base_dir = self.config_manager.get_download_dir()
+                download_dir = os.path.join(base_dir, game_name)
+                
+                try:
+                    if os.path.exists(download_dir):
+                        shutil.rmtree(download_dir)
+                        print(f"Deleted folder: {download_dir}")
+                except Exception as e:
+                    print(f"Error deleting folder: {e}")
+
+            threading.Thread(target=delete_files, daemon=True).start()
             
             del self.queue_items[item_id]
             self.queue_tree.delete(item_id)

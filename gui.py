@@ -80,6 +80,30 @@ class ConfigManager:
                 torrent_cfg[key] = val
         return torrent_cfg
 
+    def save_queue(self, queue_items, torrent_queue_items):
+        """Save the current queue to config."""
+        serialized_queue = []
+        for item in queue_items.values():
+            # Copy to avoid modifying the live item
+            item_copy = item.copy()
+            # Remove tree_id as it's not stable
+            item_copy.pop('tree_id', None)
+            serialized_queue.append(item_copy)
+            
+        serialized_torrent_queue = []
+        for item in torrent_queue_items.values():
+            item_copy = item.copy()
+            item_copy.pop('torrent_id', None) # libtorrent handles are not persistent
+            serialized_torrent_queue.append(item_copy)
+            
+        self.config["queue"] = serialized_queue
+        self.config["torrent_queue"] = serialized_torrent_queue
+        self.save_config()
+
+    def get_queue(self):
+        """Load the saved queue from config."""
+        return self.config.get("queue", []), self.config.get("torrent_queue", [])
+
 class FitGirlDownloaderApp:
     def __init__(self, root):
         self.root = root
@@ -108,6 +132,9 @@ class FitGirlDownloaderApp:
         self.setup_ui()
         self.start_download_worker()
         self.check_clipboard()
+        
+        # Load saved queue
+        self.root.after(100, self.load_saved_queue)
         
         # Start torrent status polling
         if self.torrent_manager:
@@ -241,13 +268,51 @@ class FitGirlDownloaderApp:
         self.btn_stop.pack(side=tk.LEFT, padx=(0, 5))
         self.btn_resume = ttk.Button(action_frame, text="Resume", command=self.resume_item, state=tk.DISABLED)
         self.btn_resume.pack(side=tk.LEFT, padx=(0, 5))
-        self.btn_cancel = ttk.Button(action_frame, text="Cancel", command=self.cancel_item, state=tk.DISABLED)
-        self.btn_cancel.pack(side=tk.LEFT)
+        self.btn_remove = ttk.Button(action_frame, text="Remove", command=self.remove_item, state=tk.DISABLED)
+        self.btn_remove.pack(side=tk.LEFT)
         
         # Now pack the treeview to take up remaining space
         self.queue_tree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
         self.queue_tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+
+    def save_queue(self):
+        """Helper to save the current queue state."""
+        self.config_manager.save_queue(self.queue_items, self.torrent_queue_items)
+
+    def load_saved_queue(self):
+        """Load and restore the queue from config."""
+        queue_data, torrent_queue_data = self.config_manager.get_queue()
+        
+        for item in queue_data:
+            # If status was 'Downloading', reset to 'Queued'
+            if item.get('status') == 'Downloading':
+                item['status'] = 'Queued'
+            
+            item_id = self.queue_tree.insert("", tk.END, values=(item['name'], item.get('status', 'Queued')))
+            item['tree_id'] = item_id
+            self.queue_items[item_id] = item
+            
+        for item in torrent_queue_data:
+            display_name = item.get('display_name', f"🧲 {item['name']}")
+            item_id = self.queue_tree.insert("", tk.END, values=(display_name, "Queued"))
+            
+            if self.torrent_manager and 'magnet_link' in item:
+                base_dir = self.config_manager.get_download_dir()
+                try:
+                    torrent_id = self.torrent_manager.add_magnet(item['magnet_link'], base_dir, name=item['name'])
+                    item['torrent_id'] = torrent_id
+                    
+                    # If it was paused, pause it again
+                    if item.get('is_paused'):
+                        self.torrent_manager.pause(torrent_id)
+                except Exception as e:
+                    print(f"Error restarting torrent {item['name']}: {e}")
+            
+            item['display_status'] = 'Queued'
+            self.torrent_queue_items[item_id] = item
+        
+        self.on_tree_select(None)
 
         self.fetched_data = None
 
@@ -272,7 +337,7 @@ class FitGirlDownloaderApp:
                 else:
                     self.btn_stop.config(state=tk.DISABLED)
                     self.btn_resume.config(state=tk.DISABLED)
-                self.btn_cancel.config(state=tk.NORMAL)
+                self.btn_remove.config(state=tk.NORMAL)
                 return
             
             # Regular download item
@@ -288,13 +353,13 @@ class FitGirlDownloaderApp:
                 self.btn_resume.config(state=tk.DISABLED)
             
             if status != 'Completed':
-                self.btn_cancel.config(state=tk.NORMAL)
+                self.btn_remove.config(state=tk.NORMAL)
             else:
-                self.btn_cancel.config(state=tk.NORMAL)
+                self.btn_remove.config(state=tk.NORMAL)
         else:
             self.btn_stop.config(state=tk.DISABLED)
             self.btn_resume.config(state=tk.DISABLED)
-            self.btn_cancel.config(state=tk.DISABLED)
+            self.btn_remove.config(state=tk.DISABLED)
 
     def stop_item(self):
         selected = self.queue_tree.selection()
@@ -307,6 +372,7 @@ class FitGirlDownloaderApp:
                 if self.torrent_manager:
                     self.torrent_manager.pause(torrent_info['torrent_id'])
                     torrent_info['is_paused'] = True
+                self.save_queue()
                 self.on_tree_select(None)
                 return
             
@@ -315,6 +381,7 @@ class FitGirlDownloaderApp:
                 self.abort_flag = True
                 self.queue_items[item_id]['status'] = 'Stopped'
                 self.queue_tree.set(item_id, 'status', 'Stopped')
+                self.save_queue()
                 self.on_tree_select(None)
 
     def resume_item(self):
@@ -328,6 +395,7 @@ class FitGirlDownloaderApp:
                 if self.torrent_manager:
                     self.torrent_manager.resume(torrent_info['torrent_id'])
                     torrent_info['is_paused'] = False
+                self.save_queue()
                 self.on_tree_select(None)
                 return
             
@@ -335,9 +403,10 @@ class FitGirlDownloaderApp:
             if item_id in self.queue_items and self.queue_items[item_id]['status'] == 'Stopped':
                 self.queue_items[item_id]['status'] = 'Queued'
                 self.queue_tree.set(item_id, 'status', 'Queued')
+                self.save_queue()
                 self.on_tree_select(None)
 
-    def cancel_item(self):
+    def remove_item(self):
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
@@ -349,6 +418,7 @@ class FitGirlDownloaderApp:
                     self.torrent_manager.remove(torrent_info['torrent_id'], delete_files=False)
                 del self.torrent_queue_items[item_id]
                 self.queue_tree.delete(item_id)
+                self.save_queue()
                 self.on_tree_select(None)
                 return
             
@@ -362,6 +432,7 @@ class FitGirlDownloaderApp:
             
             del self.queue_items[item_id]
             self.queue_tree.delete(item_id)
+            self.save_queue()
             self.on_tree_select(None)
 
     def change_dir(self):
@@ -524,7 +595,9 @@ class FitGirlDownloaderApp:
                     'display_status': 'Starting...',
                     'is_paused': False,
                     'is_finished': False,
+                    'magnet_link': magnet,
                 }
+                self.save_queue()
                 
                 self.btn_torrent.config(state=tk.DISABLED)
                 
@@ -591,6 +664,7 @@ class FitGirlDownloaderApp:
             self.fetched_data['tree_id'] = item_id
             self.fetched_data['status'] = 'Queued'
             self.queue_items[item_id] = self.fetched_data
+            self.save_queue()
             self.fetched_data = None
             self.btn_queue.config(state=tk.DISABLED)
 
@@ -680,6 +754,7 @@ class FitGirlDownloaderApp:
             if not self.abort_flag:
                 item['status'] = 'Completed'
                 self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Completed"))
+                self.save_queue()
             
             self.current_download_id = None
             self.is_downloading = False

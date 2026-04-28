@@ -237,8 +237,9 @@ class FitGirlDownloaderApp:
         threading.Thread(target=self._load_app_icon, daemon=True).start()
         threading.Thread(target=self._load_fitgirl_image, daemon=True).start()
 
-        # Progress Frame (initially hidden)
+        # Progress Frame (initially visible)
         self.progress_frame = ttk.Frame(main_frame)
+        self.progress_frame.pack(side=tk.BOTTOM, fill=tk.X)
         self.lbl_current_download = ttk.Label(self.progress_frame, text="Currently Downloading: None")
         self.lbl_current_download.pack(anchor=tk.W)
         
@@ -325,7 +326,6 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
-            self.progress_frame.pack(side=tk.BOTTOM, fill=tk.X)
             
             # Immediately refresh statuses to show detailed info for selected item
             if item_id in self.torrent_queue_items:
@@ -372,7 +372,11 @@ class FitGirlDownloaderApp:
             self.btn_stop.config(state=tk.DISABLED)
             self.btn_resume.config(state=tk.DISABLED)
             self.btn_remove.config(state=tk.DISABLED)
-            self.progress_frame.pack_forget()
+            # When nothing is selected, we could clear the bar or leave last state
+            # Let's clear it for clarity
+            self.lbl_current_download.config(text="Currently Downloading: None")
+            self.progress_var.set(0)
+            self.lbl_progress_text.config(text="0%")
 
     def stop_item(self):
         selected = self.queue_tree.selection()

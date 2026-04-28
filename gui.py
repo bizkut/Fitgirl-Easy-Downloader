@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 import json
 import threading
 import queue
@@ -97,6 +98,8 @@ class FitGirlDownloaderApp:
         settings_frame.pack(fill=tk.X, pady=(0, 10))
         self.lbl_download_dir = ttk.Label(settings_frame, text=f"Download Dir: {self.config_manager.get_download_dir()}")
         self.lbl_download_dir.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        btn_open_dir = ttk.Button(settings_frame, text="Open Folder", command=self.open_dir)
+        btn_open_dir.pack(side=tk.RIGHT, padx=(5, 0))
         btn_change_dir = ttk.Button(settings_frame, text="Change", command=self.change_dir)
         btn_change_dir.pack(side=tk.RIGHT)
 
@@ -242,6 +245,16 @@ class FitGirlDownloaderApp:
     def change_dir(self):
         self.choose_download_dir()
         self.lbl_download_dir.config(text=f"Download Dir: {self.config_manager.get_download_dir()}")
+
+    def open_dir(self):
+        path = self.config_manager.get_download_dir()
+        if os.path.exists(path):
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
 
     def fetch_info(self):
         url = self.url_var.get().strip()

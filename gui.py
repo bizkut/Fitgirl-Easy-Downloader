@@ -514,12 +514,20 @@ class FitGirlDownloaderApp:
                 # --- Improved Description Extraction ---
                 description = "-"
                 
-                # 1. Try Header-based approach first
-                m_desc = re.search(r'(?:Game Description|Game Features)\s*\n+(.*?)(?=\n+(?:Repack Features|Screenshots|Afraid of|Mirrors|Download Mirrors)|\Z)', full_text, re.DOTALL | re.IGNORECASE)
-                if m_desc:
-                    description = m_desc.group(1).strip()
+                # 1. Try to find su-spoiler-content if there's a title for Game Description
+                spoiler_title = entry_content.find(['div', 'span'], class_='su-spoiler-title', text=re.compile(r'Game Description', re.I))
+                if spoiler_title:
+                    spoiler_content = spoiler_title.find_next_sibling('div', class_='su-spoiler-content')
+                    if spoiler_content:
+                        description = spoiler_content.get_text('\n').strip()
                 
-                # 2. If header-based fails or is too short, try paragraph filtering
+                # 2. Try Header-based approach if spoiler approach didn't work
+                if description == "-":
+                    m_desc = re.search(r'(?:Game Description|Game Features)\s+(.*?)(?=\n+(?:Repack Features|Screenshots|Afraid of|Mirrors|Download Mirrors|Download Mirrors)|\Z)', full_text, re.DOTALL | re.IGNORECASE)
+                    if m_desc:
+                        description = m_desc.group(1).strip()
+                
+                # 3. If still nothing or too short, try paragraph filtering
                 if description == "-" or len(description) < 50:
                     paragraphs = []
                     for p in entry_content.find_all(['p', 'div', 'li']):

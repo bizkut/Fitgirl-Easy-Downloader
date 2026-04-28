@@ -511,17 +511,32 @@ class FitGirlDownloaderApp:
                 m_rep = re.search(r'Repack Size:\s*([^\n]+)', full_text)
                 if m_rep: repack_size = m_rep.group(1).strip()
                 
+                # --- Improved Description Extraction ---
                 description = "-"
-                # Try multiple possible headers for description
-                m_desc = re.search(r'(?:Game Description|Game Features)\n+(.*?)(?=\n+(?:Repack Features|Screenshots|Game Features|Afraid of)|\Z)', full_text, re.DOTALL | re.IGNORECASE)
+                
+                # 1. Try Header-based approach first
+                m_desc = re.search(r'(?:Game Description|Game Features)\s*\n+(.*?)(?=\n+(?:Repack Features|Screenshots|Afraid of|Mirrors|Download Mirrors)|\Z)', full_text, re.DOTALL | re.IGNORECASE)
                 if m_desc:
                     description = m_desc.group(1).strip()
-                else:
-                    # Fallback: look for a block of text that doesn't look like links or features
-                    # Often descriptions are after mirrors or repack features
-                    m_fallback = re.search(r'Repack Features\n+.*?\n\n(.*?)(?=\n+(?:Afraid of|Screenshots)|\Z)', full_text, re.DOTALL)
-                    if m_fallback:
-                        description = m_fallback.group(1).strip()
+                
+                # 2. If header-based fails or is too short, try paragraph filtering
+                if description == "-" or len(description) < 50:
+                    paragraphs = []
+                    for p in entry_content.find_all(['p', 'div', 'li']):
+                        p_text = p.get_text().strip()
+                        # Skip short lines, technical info, or link-heavy lines
+                        if len(p_text) < 30: continue
+                        if any(x in p_text for x in ["Mirrors", "Download", "Filehoster", "Size:", "Languages:", "Genres/Tags:"]): continue
+                        if "Repack Features" in p_text: continue
+                        if p.find('a', href=True) and len(p.find_all('a')) > 2: continue # Likely a mirror list
+                        
+                        # Avoid duplicates (since we look at p, div, and li)
+                        if not any(p_text in existing for existing in paragraphs):
+                            paragraphs.append(p_text)
+                    
+                    if paragraphs:
+                        # Join the first few descriptive paragraphs
+                        description = "\n\n".join(paragraphs[:5])
 
             # Extract magnet link
             magnet_link = None

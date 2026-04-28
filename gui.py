@@ -512,9 +512,16 @@ class FitGirlDownloaderApp:
                 if m_rep: repack_size = m_rep.group(1).strip()
                 
                 description = "-"
-                m_desc = re.search(r'Game Description\n+(.*?)(?=\n+Repack Features|\Z)', full_text, re.DOTALL)
+                # Try multiple possible headers for description
+                m_desc = re.search(r'(?:Game Description|Game Features)\n+(.*?)(?=\n+(?:Repack Features|Screenshots|Game Features|Afraid of)|\Z)', full_text, re.DOTALL | re.IGNORECASE)
                 if m_desc:
                     description = m_desc.group(1).strip()
+                else:
+                    # Fallback: look for a block of text that doesn't look like links or features
+                    # Often descriptions are after mirrors or repack features
+                    m_fallback = re.search(r'Repack Features\n+.*?\n\n(.*?)(?=\n+(?:Afraid of|Screenshots)|\Z)', full_text, re.DOTALL)
+                    if m_fallback:
+                        description = m_fallback.group(1).strip()
 
             # Extract magnet link
             magnet_link = None
@@ -818,8 +825,6 @@ class FitGirlDownloaderApp:
                             self.root.after(0, lambda p=progress_text: self.queue_tree.exists(item_id) and self.queue_tree.set(item_id, "status", p))
             return True
         return False
-                        
-            self.root.after(0, lambda: self.on_tree_select(None))
 
     # ─── Torrent Status Polling ────────────────────────────────────────
 

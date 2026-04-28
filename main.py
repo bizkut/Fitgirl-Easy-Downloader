@@ -84,9 +84,14 @@ def download_file(download_url, output_path):
         log.error("Failed To Download", response.status_code)
         return False
 
-def process_and_download(links, game_url):
+def process_and_download(links, game_url, custom_folder=None):
     game_name = urlparse(game_url).path.strip('/').split('--')[0] or "Downloaded_Game"
-    downloads_folder = os.path.join("downloads", game_name)
+    
+    if custom_folder:
+        downloads_folder = os.path.join(custom_folder, game_name)
+    else:
+        downloads_folder = os.path.join("downloads", game_name)
+
     os.makedirs(downloads_folder, exist_ok=True)
     log.info("Download folder", downloads_folder)
 
@@ -123,6 +128,7 @@ def main():
     parser = argparse.ArgumentParser(description="FitGirl Easy Downloader - Combined Link Fetching and Downloading")
     parser.add_argument("url", nargs="?", help="FitGirl Game URL")
     parser.add_argument("-d", "--download", action="store_true", help="Download the links automatically after fetching")
+    parser.add_argument("-o", "--output", help="Custom download destination folder")
     args = parser.parse_args()
 
     log.clear()
@@ -156,7 +162,7 @@ def main():
 
     if args.download:
         log.info("Auto-download switch enabled", "Starting downloads...")
-        process_and_download(ff_links, url)
+        process_and_download(ff_links, url, custom_folder=args.output)
     else:
         log.warning("Auto-download not enabled", "Use -d or --download to download automatically")
 

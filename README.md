@@ -1,6 +1,6 @@
 # Fitgirl-Easy-Downloader
 
-This Tool Helps To Download Multiple Files Easily From fitgirl-repacks.site Through fuckingfast.co
+This Tool Helps To Download Multiple Files Easily From fitgirl-repacks.site Through fuckingfast.co — now with a **built-in torrent client** for concurrent downloads!
 
 ## Prerequisites
 
@@ -14,12 +14,20 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Option 1: GUI Mode (New!)
-Enjoy a fully interactive cross-platform Desktop Application with queue management, game info fetching, and seamless resume support!
+### Option 1: GUI Mode (Recommended)
+Enjoy a fully interactive cross-platform Desktop Application with queue management, game info fetching, **built-in torrent client**, and seamless resume support!
 ```bash
 python gui.py
 ```
 Or simply run the standalone executable after building (see below).
+
+#### Built-in Torrent Client
+The GUI includes a built-in torrent client powered by [libtorrent](https://libtorrent.org/). When you fetch a game page, click **⚡ Torrent Download** to download via torrent directly inside the app — no external torrent client needed.
+- **Concurrent downloads**: Multiple torrents download simultaneously.
+- **Live progress**: Speed, peers, ETA, and seed ratio displayed in the queue.
+- **Pause/Resume/Cancel**: Full control over each torrent.
+- **Auto-seeding**: Seeds up to a configurable ratio (default 1.0x), then auto-stops.
+- **Graceful fallback**: If `libtorrent` is not installed, the button opens the magnet link in your default external torrent client instead.
 
 ### Option 2: CLI All-in-One Command
 You can fetch links and start downloading immediately using `main.py`:
@@ -57,7 +65,8 @@ You can compile the GUI application into a standalone executable (no Python requ
 3. Find your standalone Desktop Application in the `dist/` folder!
 
 ## Features
-- **(NEW) Cross-platform GUI Application** with live queue management.
+- **Cross-platform GUI Application** with live queue management.
+- **Built-in Torrent Client**: Download via magnet links directly in the app — concurrent multi-torrent downloads with live speed, peers, ETA, and seed ratio.
 - **Smart Resume**: Automatically skips downloaded files and resumes partially downloaded files via HTTP Range.
 - Fetches full Game Information, Thumbnail, and Descriptions.
 - Extracts links even from modern list-based layouts.

@@ -16,6 +16,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
+# Built-in torrent client (graceful fallback if libtorrent not installed)
+try:
+    from torrent_client import TorrentManager
+    HAS_LIBTORRENT = True
+except ImportError:
+    HAS_LIBTORRENT = False
+
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -56,6 +63,23 @@ class ConfigManager:
         self.config["download_dir"] = directory
         self.save_config()
 
+    def get_torrent_config(self):
+        """Get torrent-specific configuration with defaults."""
+        defaults = {
+            "port_range": [6881, 6891],
+            "max_download_speed": 0,
+            "max_upload_speed": 0,
+            "seed_after_download": True,
+            "seed_ratio_limit": 1.0,
+            "encryption": True
+        }
+        torrent_cfg = self.config.get("torrent", {})
+        # Merge defaults with saved config
+        for key, val in defaults.items():
+            if key not in torrent_cfg:
+                torrent_cfg[key] = val
+        return torrent_cfg
+
 class FitGirlDownloaderApp:
     def __init__(self, root):
         self.root = root
@@ -71,9 +95,26 @@ class FitGirlDownloaderApp:
         self.abort_flag = False
         self.is_downloading = False
         
+        # Torrent client (concurrent downloads)
+        self.torrent_manager = None
+        self.torrent_queue_items = {}  # tree_id -> {torrent_id, name, ...}
+        if HAS_LIBTORRENT:
+            try:
+                torrent_cfg = self.config_manager.get_torrent_config()
+                self.torrent_manager = TorrentManager(config=torrent_cfg)
+            except Exception as e:
+                print(f"[WARN] Failed to initialize torrent client: {e}")
+        
         self.setup_ui()
         self.start_download_worker()
         self.check_clipboard()
+        
+        # Start torrent status polling
+        if self.torrent_manager:
+            self._poll_torrent_status()
+        
+        # Clean up on close
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def check_clipboard(self):
         try:
@@ -152,7 +193,8 @@ class FitGirlDownloaderApp:
         self.btn_queue = ttk.Button(btn_actions_frame, text="Add to Queue", command=self.add_to_queue, state=tk.DISABLED)
         self.btn_queue.pack(side=tk.LEFT, padx=(0, 5))
         
-        self.btn_torrent = ttk.Button(btn_actions_frame, text="Download via Torrent", command=self.download_torrent, state=tk.DISABLED)
+        torrent_label = "⚡ Torrent Download" if HAS_LIBTORRENT else "Download via Torrent"
+        self.btn_torrent = ttk.Button(btn_actions_frame, text=torrent_label, command=self.download_torrent, state=tk.DISABLED)
         self.btn_torrent.pack(side=tk.LEFT)
 
         self.txt_desc = tk.Text(self.info_frame, wrap=tk.WORD, height=4, width=40, font=('Helvetica', 9))
@@ -213,6 +255,27 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
+            
+            # Check if it's a torrent item
+            if item_id in self.torrent_queue_items:
+                torrent_info = self.torrent_queue_items[item_id]
+                status = torrent_info.get('display_status', '')
+                is_paused = torrent_info.get('is_paused', False)
+                is_finished = torrent_info.get('is_finished', False)
+                
+                if is_paused:
+                    self.btn_stop.config(state=tk.DISABLED)
+                    self.btn_resume.config(state=tk.NORMAL)
+                elif not is_finished:
+                    self.btn_stop.config(state=tk.NORMAL)
+                    self.btn_resume.config(state=tk.DISABLED)
+                else:
+                    self.btn_stop.config(state=tk.DISABLED)
+                    self.btn_resume.config(state=tk.DISABLED)
+                self.btn_cancel.config(state=tk.NORMAL)
+                return
+            
+            # Regular download item
             status = self.queue_items[item_id]['status']
             if status == 'Downloading':
                 self.btn_stop.config(state=tk.NORMAL)
@@ -237,7 +300,18 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
-            if self.queue_items[item_id]['status'] == 'Downloading':
+            
+            # Torrent item
+            if item_id in self.torrent_queue_items:
+                torrent_info = self.torrent_queue_items[item_id]
+                if self.torrent_manager:
+                    self.torrent_manager.pause(torrent_info['torrent_id'])
+                    torrent_info['is_paused'] = True
+                self.on_tree_select(None)
+                return
+            
+            # Regular download item
+            if item_id in self.queue_items and self.queue_items[item_id]['status'] == 'Downloading':
                 self.abort_flag = True
                 self.queue_items[item_id]['status'] = 'Stopped'
                 self.queue_tree.set(item_id, 'status', 'Stopped')
@@ -247,7 +321,18 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
-            if self.queue_items[item_id]['status'] == 'Stopped':
+            
+            # Torrent item
+            if item_id in self.torrent_queue_items:
+                torrent_info = self.torrent_queue_items[item_id]
+                if self.torrent_manager:
+                    self.torrent_manager.resume(torrent_info['torrent_id'])
+                    torrent_info['is_paused'] = False
+                self.on_tree_select(None)
+                return
+            
+            # Regular download item
+            if item_id in self.queue_items and self.queue_items[item_id]['status'] == 'Stopped':
                 self.queue_items[item_id]['status'] = 'Queued'
                 self.queue_tree.set(item_id, 'status', 'Queued')
                 self.on_tree_select(None)
@@ -256,6 +341,20 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
+            
+            # Torrent item
+            if item_id in self.torrent_queue_items:
+                torrent_info = self.torrent_queue_items[item_id]
+                if self.torrent_manager:
+                    self.torrent_manager.remove(torrent_info['torrent_id'], delete_files=True)
+                del self.torrent_queue_items[item_id]
+                self.queue_tree.delete(item_id)
+                self.on_tree_select(None)
+                return
+            
+            # Regular download item
+            if item_id not in self.queue_items:
+                return
             item = self.queue_items[item_id]
             
             if item['status'] == 'Downloading':
@@ -417,13 +516,45 @@ class FitGirlDownloaderApp:
             webbrowser.open(self.fetched_data['url'])
 
     def download_torrent(self):
-        if self.fetched_data and self.fetched_data.get('magnet_link'):
+        if not self.fetched_data or not self.fetched_data.get('magnet_link'):
+            return
+        
+        magnet = self.fetched_data['magnet_link']
+        game_name = self.fetched_data['name']
+        
+        # Use built-in torrent client if available
+        if self.torrent_manager:
+            base_dir = self.config_manager.get_download_dir()
+            save_path = os.path.join(base_dir, game_name)
+            
+            try:
+                torrent_id = self.torrent_manager.add_magnet(magnet, save_path, name=game_name)
+                
+                # Add to queue treeview with torrent indicator
+                display_name = f"🧲 {game_name}"
+                item_id = self.queue_tree.insert("", tk.END, values=(display_name, "Starting..."))
+                
+                self.torrent_queue_items[item_id] = {
+                    'torrent_id': torrent_id,
+                    'name': game_name,
+                    'display_name': display_name,
+                    'display_status': 'Starting...',
+                    'is_paused': False,
+                    'is_finished': False,
+                }
+                
+                self.btn_torrent.config(state=tk.DISABLED)
+                
+            except Exception as e:
+                messagebox.showerror("Torrent Error", f"Failed to start torrent:\n{e}")
+        else:
+            # Fallback: open in external torrent client
             if sys.platform == "win32":
-                os.startfile(self.fetched_data['magnet_link'])
+                os.startfile(magnet)
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", self.fetched_data['magnet_link']])
+                subprocess.Popen(["open", magnet])
             else:
-                subprocess.Popen(["xdg-open", self.fetched_data['magnet_link']])
+                subprocess.Popen(["xdg-open", magnet])
 
     def _load_image(self, url):
         try:
@@ -632,6 +763,117 @@ class FitGirlDownloaderApp:
     def _update_progress(self, value, text):
         self.progress_var.set(value)
         self.lbl_progress_text.config(text=text)
+
+    # ─── Torrent Status Polling ────────────────────────────────────────
+
+    def _poll_torrent_status(self):
+        """Poll all active torrents every 500ms and update the queue UI."""
+        if not self.torrent_manager:
+            return
+
+        for tree_id, torrent_info in list(self.torrent_queue_items.items()):
+            # Skip if tree item was already deleted
+            if not self.queue_tree.exists(tree_id):
+                continue
+
+            status = self.torrent_manager.get_status(torrent_info['torrent_id'])
+            if not status:
+                continue
+
+            # Update cached state
+            torrent_info['is_paused'] = status['is_paused']
+            torrent_info['is_finished'] = status['is_finished']
+
+            # Update name once metadata arrives
+            if status['has_metadata'] and status['name'] != torrent_info['name']:
+                torrent_info['name'] = status['name']
+                torrent_info['display_name'] = f"🧲 {status['name']}"
+                self.queue_tree.set(tree_id, 'name', torrent_info['display_name'])
+
+            # Build status string
+            if status['is_paused'] and not status['is_seeding']:
+                status_str = f"⏸ Paused — {status['progress']:.1f}%"
+            elif status['is_seeding']:
+                ratio = status['seed_ratio']
+                up_speed = self._format_speed(status['upload_rate'])
+                if status['is_paused']:
+                    status_str = f"✅ Done — Seeded {ratio:.2f}x"
+                else:
+                    status_str = f"🌱 Seeding {ratio:.2f}x — ↑ {up_speed}"
+            elif not status['has_metadata']:
+                status_str = "🔍 Fetching metadata..."
+            else:
+                dl_speed = self._format_speed(status['download_rate'])
+                progress = status['progress']
+                peers = status['num_peers']
+                eta_str = self._format_eta(status['eta'])
+                status_str = f"↓ {dl_speed} — {progress:.1f}% — {peers} peers — ETA {eta_str}"
+
+            torrent_info['display_status'] = status_str
+            self.queue_tree.set(tree_id, 'status', status_str)
+
+            # Update progress bar if this torrent is selected
+            selected = self.queue_tree.selection()
+            if selected and selected[0] == tree_id:
+                self.progress_var.set(status['progress'])
+                dl_total = self._format_size(status['total_downloaded'])
+                total = self._format_size(status['total_size'])
+                dl_speed = self._format_speed(status['download_rate'])
+                ul_speed = self._format_speed(status['upload_rate'])
+                eta_str = self._format_eta(status['eta'])
+                progress_text = (
+                    f"{status['progress']:.1f}% | {dl_total}/{total} | "
+                    f"↓ {dl_speed} ↑ {ul_speed} | {status['num_peers']} peers | ETA {eta_str}"
+                )
+                self.lbl_progress_text.config(text=progress_text)
+                self.lbl_current_download.config(text=f"Torrent: {torrent_info['name']}")
+
+        # Schedule next poll
+        self.root.after(500, self._poll_torrent_status)
+
+    @staticmethod
+    def _format_speed(bytes_per_sec):
+        """Format speed in human-readable units."""
+        if bytes_per_sec < 1024:
+            return f"{bytes_per_sec:.0f} B/s"
+        elif bytes_per_sec < 1024 * 1024:
+            return f"{bytes_per_sec / 1024:.1f} KB/s"
+        elif bytes_per_sec < 1024 * 1024 * 1024:
+            return f"{bytes_per_sec / (1024 * 1024):.2f} MB/s"
+        else:
+            return f"{bytes_per_sec / (1024 * 1024 * 1024):.2f} GB/s"
+
+    @staticmethod
+    def _format_size(size_bytes):
+        """Format size in human-readable units."""
+        if size_bytes <= 0:
+            return "0 B"
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+
+    @staticmethod
+    def _format_eta(seconds):
+        """Format ETA as human-readable time."""
+        if seconds <= 0:
+            return "--:--"
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        return f"{m:02d}:{s:02d}"
+
+    def _on_close(self):
+        """Clean up torrent session on app exit."""
+        if self.torrent_manager:
+            try:
+                self.torrent_manager.shutdown()
+            except:
+                pass
+        self.root.destroy()
+
 
 if __name__ == "__main__":
     root = tk.Tk()

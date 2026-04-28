@@ -871,32 +871,23 @@ class FitGirlDownloaderApp:
             selected = self.queue_tree.selection()
             is_selected = (selected and selected[0] == tree_id)
             
-            # Build status string
+            # Build simplified status string for the queue treeview
             if status['is_paused'] and not status['is_seeding']:
-                status_str = f"⏸ Paused — {status['progress']:.1f}%" if is_selected else "⏸ Paused"
+                status_str = "⏸ Paused"
             elif status['is_seeding']:
-                ratio = status['seed_ratio']
-                up_speed = self._format_speed(status['upload_rate'])
                 if status['is_paused']:
-                    status_str = f"✅ Done — Seeded {ratio:.2f}x" if is_selected else "✅ Finished"
+                    status_str = "✅ Finished"
                 else:
-                    status_str = f"🌱 Seeding {ratio:.2f}x — ↑ {up_speed}" if is_selected else "🌱 Seeding"
+                    status_str = "🌱 Seeding"
             elif not status['has_metadata']:
                 status_str = "🔍 Fetching metadata..."
             else:
-                dl_speed = self._format_speed(status['download_rate'])
-                progress = status['progress']
-                peers = status['num_peers']
-                eta_str = self._format_eta(status['eta'])
-                if is_selected:
-                    status_str = f"↓ {dl_speed} — {progress:.1f}% — {peers} peers — ETA {eta_str}"
-                else:
-                    status_str = f"Downloading {progress:.1f}%"
-
-            torrent_info['display_status'] = status_str
+                status_str = f"Downloading {status['progress']:.1f}%"
+            
             self.queue_tree.set(tree_id, 'status', status_str)
+            torrent_info['display_status'] = status_str
 
-            # Update progress bar if this torrent is selected
+            # Update detailed progress bar if this torrent is selected
             selected = self.queue_tree.selection()
             if selected and selected[0] == tree_id:
                 self.progress_var.set(status['progress'])
@@ -905,6 +896,8 @@ class FitGirlDownloaderApp:
                 dl_speed = self._format_speed(status['download_rate'])
                 ul_speed = self._format_speed(status['upload_rate'])
                 eta_str = self._format_eta(status['eta'])
+                
+                # Detailed info for the bottom status bar
                 progress_text = (
                     f"{status['progress']:.1f}% | {dl_total}/{total} | "
                     f"↓ {dl_speed} ↑ {ul_speed} | {status['num_peers']} peers | ETA {eta_str}"

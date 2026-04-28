@@ -508,7 +508,7 @@ class FitGirlDownloaderApp:
         # Use built-in torrent client if available
         if self.torrent_manager:
             base_dir = self.config_manager.get_download_dir()
-            save_path = os.path.join(base_dir, game_name)
+            save_path = base_dir
             
             try:
                 torrent_id = self.torrent_manager.add_magnet(magnet, save_path, name=game_name)

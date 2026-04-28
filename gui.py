@@ -237,17 +237,16 @@ class FitGirlDownloaderApp:
         threading.Thread(target=self._load_app_icon, daemon=True).start()
         threading.Thread(target=self._load_fitgirl_image, daemon=True).start()
 
-        # Progress Frame (packed before queue_frame so it stays anchored at the bottom)
-        progress_frame = ttk.Frame(main_frame)
-        progress_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        self.lbl_current_download = ttk.Label(progress_frame, text="Currently Downloading: None")
+        # Progress Frame (initially hidden)
+        self.progress_frame = ttk.Frame(main_frame)
+        self.lbl_current_download = ttk.Label(self.progress_frame, text="Currently Downloading: None")
         self.lbl_current_download.pack(anchor=tk.W)
         
         self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100)
+        self.progress_bar = ttk.Progressbar(self.progress_frame, variable=self.progress_var, maximum=100)
         self.progress_bar.pack(fill=tk.X, pady=(5, 0))
         
-        self.lbl_progress_text = ttk.Label(progress_frame, text="0%")
+        self.lbl_progress_text = ttk.Label(self.progress_frame, text="0%")
         self.lbl_progress_text.pack(anchor=tk.E)
 
         # Queue Frame
@@ -326,6 +325,7 @@ class FitGirlDownloaderApp:
         selected = self.queue_tree.selection()
         if selected:
             item_id = selected[0]
+            self.progress_frame.pack(side=tk.BOTTOM, fill=tk.X)
             
             # Check if it's a torrent item
             if item_id in self.torrent_queue_items:
@@ -363,6 +363,7 @@ class FitGirlDownloaderApp:
             self.btn_stop.config(state=tk.DISABLED)
             self.btn_resume.config(state=tk.DISABLED)
             self.btn_remove.config(state=tk.DISABLED)
+            self.progress_frame.pack_forget()
 
     def stop_item(self):
         selected = self.queue_tree.selection()
@@ -745,9 +746,9 @@ class FitGirlDownloaderApp:
                                 file_mode = 'ab'
                         
                         self.root.after(0, lambda f=file_name: self.lbl_current_download.config(text=f"Downloading -> {f[:40]}..."))
-                        self.root.after(0, lambda: self._update_progress(0, "0% | 0.00 B/0.00 B [00:00<00:00, 0.00 B/s]"))
+                        self.root.after(0, lambda: self._update_progress(0, "0% | 0.00 B/0.00 B [00:00<00:00, 0.00 B/s]", item_id))
                         
-                        success = self._download_file(download_url, output_path, file_mode, existing_size, remote_size)
+                        success = self._download_file(download_url, output_path, file_mode, existing_size, remote_size, item_id)
                         if not success: # abort flag was set
                             break
                             
@@ -766,7 +767,7 @@ class FitGirlDownloaderApp:
             self.root.after(0, lambda: self.lbl_progress_text.config(text="0%"))
             self.root.after(0, lambda: self.on_tree_select(None))
 
-    def _download_file(self, download_url, output_path, mode, existing_size, total_size):
+    def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id):
         headers = HEADERS.copy()
         if mode == 'ab' and existing_size > 0:
             headers['Range'] = f'bytes={existing_size}-'
@@ -817,13 +818,16 @@ class FitGirlDownloaderApp:
                             eta = (total_size - downloaded) / speed if speed > 0 else 0
                             
                             progress_text = f"{progress:.0f}% | {format_size(downloaded)}/{format_size(total_size)} [{format_time(elapsed_time)}<{format_time(eta)}, {format_size(speed)}/s]"
-                            self.root.after(0, self._update_progress, progress, progress_text)
+                            self.root.after(0, self._update_progress, progress, progress_text, item_id)
             return True
         return False
                         
-    def _update_progress(self, value, text):
-        self.progress_var.set(value)
-        self.lbl_progress_text.config(text=text)
+    def _update_progress(self, value, text, item_id=None):
+        """Update progress bar only if the corresponding item is selected."""
+        selected = self.queue_tree.selection()
+        if selected and (item_id is None or selected[0] == item_id):
+            self.progress_var.set(value)
+            self.lbl_progress_text.config(text=text)
 
     # ─── Torrent Status Polling ────────────────────────────────────────
 

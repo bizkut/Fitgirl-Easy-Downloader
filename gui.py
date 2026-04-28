@@ -514,12 +514,15 @@ class FitGirlDownloaderApp:
                 # --- Improved Description Extraction ---
                 description = "-"
                 
-                # 1. Try to find su-spoiler-content if there's a title for Game Description
-                spoiler_title = entry_content.find(['div', 'span'], class_='su-spoiler-title', text=re.compile(r'Game Description', re.I))
-                if spoiler_title:
-                    spoiler_content = spoiler_title.find_next_sibling('div', class_='su-spoiler-content')
-                    if spoiler_content:
-                        description = spoiler_content.get_text('\n').strip()
+                # 1. Try to find su-spoiler-content anywhere in the page first
+                # Search across soup, not just entry_content, in case of weird nesting
+                for title_div in soup.find_all(['div', 'span'], class_='su-spoiler-title'):
+                    t_text = title_div.get_text().strip()
+                    if "Game Description" in t_text or "Game Features" in t_text:
+                        spoiler_content = title_div.find_next_sibling('div', class_='su-spoiler-content')
+                        if spoiler_content:
+                            description = spoiler_content.get_text('\n').strip()
+                            break
                 
                 # 2. Try Header-based approach if spoiler approach didn't work
                 if description == "-":
@@ -528,7 +531,7 @@ class FitGirlDownloaderApp:
                         description = m_desc.group(1).strip()
                 
                 # 3. If still nothing or too short, try paragraph filtering
-                if description == "-" or len(description) < 50:
+                if (description == "-" or len(description) < 50) and entry_content:
                     paragraphs = []
                     for p in entry_content.find_all(['p', 'div', 'li']):
                         p_text = p.get_text().strip()

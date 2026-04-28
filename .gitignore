@@ -1,0 +1,6 @@
+__pycache__/
+config.json
+test_*.py
+dist/
+build/
+*.spec

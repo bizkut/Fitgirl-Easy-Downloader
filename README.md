@@ -14,7 +14,14 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Option 1: All-in-One Command (Recommended)
+### Option 1: GUI Mode (New!)
+Enjoy a fully interactive cross-platform Desktop Application with queue management, game info fetching, and seamless resume support!
+```bash
+python gui.py
+```
+Or simply run the standalone executable after building (see below).
+
+### Option 2: CLI All-in-One Command
 You can fetch links and start downloading immediately using `main.py`:
 - **Fetch links only**:
   ```bash
@@ -29,7 +36,7 @@ You can fetch links and start downloading immediately using `main.py`:
   python main.py <game_url> -d -o "D:\Games"
   ```
 
-### Option 2: Manual (Old Method)
+### Option 3: Manual (Old Method)
 1. **Get Direct Download Links**: Run `get_links.py`, enter the Fitgirl game page URL, and all FuckingFast links will be copied to your clipboard automatically.
    ```bash
    python get_links.py
@@ -40,17 +47,23 @@ You can fetch links and start downloading immediately using `main.py`:
    python main.py
    ```
 
-## Windows Executable
-To create a standalone `.exe` for Windows:
-1. Install requirements: `pip install -r requirements.txt`
-2. Run: `pyinstaller --onefile --name "FitGirlDownloader" main.py`
-3. Find your executable in the `dist/` folder.
+## Standalone Executables (GUI)
+You can compile the GUI application into a standalone executable (no Python required) for your operating system.
+1. Install requirements: `pip install -r requirements.txt pillow`
+2. Run the build script for your OS:
+   - **Windows**: Run `build.bat`
+   - **macOS**: Run `./build.sh`
+   - **Linux**: Run `./build_linux.sh`
+3. Find your standalone Desktop Application in the `dist/` folder!
 
 ## Features
+- **(NEW) Cross-platform GUI Application** with live queue management.
+- **Smart Resume**: Automatically skips downloaded files and resumes partially downloaded files via HTTP Range.
+- Fetches full Game Information, Thumbnail, and Descriptions.
 - Extracts links even from modern list-based layouts.
 - Automatically uses the real game name for folder creation.
-- Sanitizes folder names for Windows compatibility.
-- Auto-copies links to clipboard.
+- Sanitizes folder names for OS compatibility.
+- Auto-copies links to clipboard (CLI mode).
 
 ## Disclaimer
 

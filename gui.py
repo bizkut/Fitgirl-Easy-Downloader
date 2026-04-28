@@ -128,8 +128,9 @@ class FitGirlDownloaderApp:
         self.txt_desc.config(state=tk.DISABLED)
         self.info_frame.columnconfigure(1, weight=1)
 
-        self.fitgirl_lbl = ttk.Label(self.info_frame)
+        self.fitgirl_lbl = ttk.Label(self.info_frame, cursor="hand2")
         self.fitgirl_lbl.grid(row=0, column=2, rowspan=5, padx=(10, 0))
+        self.fitgirl_lbl.bind("<Button-1>", lambda e: webbrowser.open("https://fitgirl-repacks.site/donations/"))
         
         self.support_lbl = ttk.Label(self.info_frame, text="Please support my site", foreground="blue", cursor="hand2")
         self.support_lbl.grid(row=5, column=2, padx=(10, 0), sticky=tk.N)

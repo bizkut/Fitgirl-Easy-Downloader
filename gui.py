@@ -331,11 +331,8 @@ class FitGirlDownloaderApp:
                 if is_paused:
                     self.btn_stop.config(state=tk.DISABLED)
                     self.btn_resume.config(state=tk.NORMAL)
-                elif not is_finished:
-                    self.btn_stop.config(state=tk.NORMAL)
-                    self.btn_resume.config(state=tk.DISABLED)
                 else:
-                    self.btn_stop.config(state=tk.DISABLED)
+                    self.btn_stop.config(state=tk.NORMAL)
                     self.btn_resume.config(state=tk.DISABLED)
                 self.btn_remove.config(state=tk.NORMAL)
                 return
@@ -841,6 +838,7 @@ class FitGirlDownloaderApp:
             # Update cached state
             torrent_info['is_paused'] = status['is_paused']
             torrent_info['is_finished'] = status['is_finished']
+            torrent_info['is_seeding'] = status['is_seeding']
 
             # Update name once metadata arrives
             if status['has_metadata'] and status['name'] != torrent_info['name']:

@@ -9,7 +9,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Run PyInstaller
-pyinstaller --noconfirm --onedir --windowed --name "FitGirl Downloader" gui.py
+pyinstaller --noconfirm --onedir --windowed --add-data "img;img" --name "FitGirl Downloader" gui.py
 
 echo.
 echo Build complete! Your Windows executable is located in the 'dist\FitGirl Downloader' folder.

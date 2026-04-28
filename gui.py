@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import threading
 import queue
@@ -12,6 +13,14 @@ from bs4 import BeautifulSoup
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 CONFIG_FILE = "config.json"
 HEADERS = {
@@ -132,6 +141,7 @@ class FitGirlDownloaderApp:
         self.fitgirl_lbl.grid(row=0, column=2, rowspan=5, padx=(10, 0))
         self.fitgirl_lbl.bind("<Button-1>", lambda e: webbrowser.open("https://fitgirl-repacks.site/donations/"))
         
+        threading.Thread(target=self._load_app_icon, daemon=True).start()
         threading.Thread(target=self._load_fitgirl_image, daemon=True).start()
 
         # Progress Frame (packed before queue_frame so it stays anchored at the bottom)
@@ -352,11 +362,27 @@ class FitGirlDownloaderApp:
         self.thumbnail_lbl.config(image=photo)
         self.thumbnail_lbl.image = photo # Keep reference
 
+    def _load_app_icon(self):
+        try:
+            img_path = resource_path("img/icon.jpg")
+            if os.path.exists(img_path):
+                img = Image.open(img_path)
+            else:
+                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2016/08/cropped-icon-32x32.jpg")
+                img = Image.open(BytesIO(r.content))
+            photo = ImageTk.PhotoImage(img)
+            self.root.after(0, lambda p=photo: self.root.iconphoto(False, p))
+        except:
+            pass
+
     def _load_fitgirl_image(self):
         try:
-            r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2024/05/support2.jpg")
-            img_data = r.content
-            img = Image.open(BytesIO(img_data))
+            img_path = resource_path("img/support.jpg")
+            if os.path.exists(img_path):
+                img = Image.open(img_path)
+            else:
+                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2024/05/support2.jpg")
+                img = Image.open(BytesIO(r.content))
             img.thumbnail((150, 200)) # Match thumbnail size logic
             photo = ImageTk.PhotoImage(img)
             self.root.after(0, lambda p=photo: self._set_fitgirl_image(p))

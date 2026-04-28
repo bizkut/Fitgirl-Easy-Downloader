@@ -5,6 +5,7 @@ import queue
 import re
 import time
 import requests
+import webbrowser
 from io import BytesIO
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
@@ -122,10 +123,19 @@ class FitGirlDownloaderApp:
         self.btn_queue.grid(row=5, column=1, sticky=tk.W, pady=(5, 0))
 
         self.txt_desc = tk.Text(self.info_frame, wrap=tk.WORD, height=4, width=40, font=('Helvetica', 9))
-        self.txt_desc.grid(row=6, column=0, columnspan=2, pady=(10, 0), sticky=tk.EW)
+        self.txt_desc.grid(row=6, column=0, columnspan=3, pady=(10, 0), sticky=tk.EW)
         self.txt_desc.insert(tk.END, "Description: -")
         self.txt_desc.config(state=tk.DISABLED)
         self.info_frame.columnconfigure(1, weight=1)
+
+        self.fitgirl_lbl = ttk.Label(self.info_frame)
+        self.fitgirl_lbl.grid(row=0, column=2, rowspan=5, padx=(10, 0))
+        
+        self.support_lbl = ttk.Label(self.info_frame, text="Please support my site", foreground="blue", cursor="hand2")
+        self.support_lbl.grid(row=5, column=2, padx=(10, 0), sticky=tk.N)
+        self.support_lbl.bind("<Button-1>", lambda e: webbrowser.open("https://fitgirl-repacks.site/donations/"))
+        
+        threading.Thread(target=self._load_fitgirl_image, daemon=True).start()
 
         # Progress Frame (packed before queue_frame so it stays anchored at the bottom)
         progress_frame = ttk.Frame(main_frame)
@@ -341,6 +351,21 @@ class FitGirlDownloaderApp:
     def _set_image(self, photo):
         self.thumbnail_lbl.config(image=photo)
         self.thumbnail_lbl.image = photo # Keep reference
+
+    def _load_fitgirl_image(self):
+        try:
+            r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2024/05/support2.jpg")
+            img_data = r.content
+            img = Image.open(BytesIO(img_data))
+            img.thumbnail((150, 200)) # Match thumbnail size logic
+            photo = ImageTk.PhotoImage(img)
+            self.root.after(0, lambda p=photo: self._set_fitgirl_image(p))
+        except:
+            pass
+
+    def _set_fitgirl_image(self, photo):
+        self.fitgirl_lbl.config(image=photo)
+        self.fitgirl_lbl.image = photo # Keep reference
 
     def add_to_queue(self):
         if self.fetched_data:

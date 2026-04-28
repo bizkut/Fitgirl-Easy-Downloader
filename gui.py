@@ -161,16 +161,19 @@ class FitGirlDownloaderApp:
         self.queue_tree.heading("status", text="Status")
         self.queue_tree.column("name", width=400)
         self.queue_tree.column("status", width=150)
-        self.queue_tree.pack(fill=tk.BOTH, expand=True)
-
+        
+        # Action Frame (packed BOTTOM so it doesn't get hidden)
         action_frame = ttk.Frame(queue_frame)
-        action_frame.pack(fill=tk.X, pady=(5, 0))
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
         self.btn_stop = ttk.Button(action_frame, text="Stop", command=self.stop_item, state=tk.DISABLED)
         self.btn_stop.pack(side=tk.LEFT, padx=(0, 5))
         self.btn_resume = ttk.Button(action_frame, text="Resume", command=self.resume_item, state=tk.DISABLED)
         self.btn_resume.pack(side=tk.LEFT, padx=(0, 5))
         self.btn_cancel = ttk.Button(action_frame, text="Cancel", command=self.cancel_item, state=tk.DISABLED)
         self.btn_cancel.pack(side=tk.LEFT)
+        
+        # Now pack the treeview to take up remaining space
+        self.queue_tree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
         self.queue_tree.bind('<<TreeviewSelect>>', self.on_tree_select)
 

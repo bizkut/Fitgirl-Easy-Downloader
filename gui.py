@@ -72,6 +72,17 @@ class FitGirlDownloaderApp:
         
         self.setup_ui()
         self.start_download_worker()
+        self.check_clipboard()
+
+    def check_clipboard(self):
+        try:
+            clipboard_text = self.root.clipboard_get()
+            if clipboard_text and 'fitgirl-repacks.site/' in clipboard_text:
+                # Basic check if it looks like a URL
+                if clipboard_text.startswith('http'):
+                    self.url_var.set(clipboard_text.strip())
+        except tk.TclError:
+            pass # Clipboard might be empty or unsupported type
 
     def check_first_run(self):
         if not self.config_manager.get_download_dir():
@@ -112,6 +123,9 @@ class FitGirlDownloaderApp:
         self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.btn_fetch = ttk.Button(url_frame, text="Fetch Info", command=self.fetch_info)
         self.btn_fetch.pack(side=tk.LEFT)
+        
+        self.btn_open_page = ttk.Button(url_frame, text="Open Game Page", command=self.open_game_page, state=tk.DISABLED)
+        self.btn_open_page.pack(side=tk.LEFT, padx=(5, 0))
 
         # Info Frame
         self.info_frame = ttk.LabelFrame(main_frame, text="Game Info", padding="10")
@@ -133,6 +147,9 @@ class FitGirlDownloaderApp:
         
         self.btn_queue = ttk.Button(self.info_frame, text="Add to Queue", command=self.add_to_queue, state=tk.DISABLED)
         self.btn_queue.grid(row=5, column=1, sticky=tk.W, pady=(5, 0))
+        
+        self.btn_torrent = ttk.Button(self.info_frame, text="Download via Torrent", command=self.download_torrent, state=tk.DISABLED)
+        self.btn_torrent.grid(row=5, column=1, sticky=tk.W, padx=(90, 0), pady=(5, 0))
 
         self.txt_desc = tk.Text(self.info_frame, wrap=tk.WORD, height=4, width=40, font=('Helvetica', 9))
         self.txt_desc.grid(row=6, column=0, columnspan=3, pady=(10, 0), sticky=tk.EW)
@@ -322,10 +339,17 @@ class FitGirlDownloaderApp:
                 if m_desc:
                     description = m_desc.group(1).strip()
 
+            # Extract magnet link
+            magnet_link = None
+            magnet_tag = soup.find('a', href=re.compile(r'^magnet:\?xt=urn:btih:'))
+            if magnet_tag:
+                magnet_link = magnet_tag['href']
+
             self.fetched_data = {
                 "url": url,
                 "name": game_name,
                 "links": links,
+                "magnet_link": magnet_link,
                 "img_url": img_url,
                 "genres": genres,
                 "company": company,
@@ -358,7 +382,25 @@ class FitGirlDownloaderApp:
             threading.Thread(target=self._load_image, args=(data['img_url'],), daemon=True).start()
         
         self.btn_fetch.config(state=tk.NORMAL)
+        self.btn_open_page.config(state=tk.NORMAL)
         self.btn_queue.config(state=tk.NORMAL)
+        if data.get('magnet_link'):
+            self.btn_torrent.config(state=tk.NORMAL)
+        else:
+            self.btn_torrent.config(state=tk.DISABLED)
+
+    def open_game_page(self):
+        if self.fetched_data and 'url' in self.fetched_data:
+            webbrowser.open(self.fetched_data['url'])
+
+    def download_torrent(self):
+        if self.fetched_data and self.fetched_data.get('magnet_link'):
+            if sys.platform == "win32":
+                os.startfile(self.fetched_data['magnet_link'])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", self.fetched_data['magnet_link']])
+            else:
+                subprocess.Popen(["xdg-open", self.fetched_data['magnet_link']])
 
     def _load_image(self, url):
         try:

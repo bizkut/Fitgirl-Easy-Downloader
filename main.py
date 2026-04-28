@@ -44,21 +44,34 @@ HEADERS = {
     'referer': 'https://fitgirl-repacks.site/',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 }
-def get_fuckingfast_links(url):
+def get_game_info(url):
     try:
         r = requests.get(url, headers=HEADERS)
         r.raise_for_status()
     except requests.exceptions.RequestException as e:
         log.error("HTTP request failed", f"{url} ({e})")
-        return []
+        return [], "Downloaded_Game"
 
     soup = BeautifulSoup(r.text, "html.parser")
+    
+    # Try to get the real game name from the entry title
+    entry_title = soup.find("h1", class_="entry-title")
+    if entry_title:
+        game_name = entry_title.get_text().split("–")[0].split("-")[0].strip()
+    else:
+        # Fallback to URL path
+        game_name = urlparse(url).path.strip('/').split('--')[0] or "Downloaded_Game"
+    
+    # Sanitize game name: remove any symbols that can break folder's name
+    game_name = re.sub(r'[\\/*?:"<>|]', "", game_name)
+    game_name = game_name.strip()
+
     links = [
         a["href"]
         for a in soup.find_all("a", href=True)
         if a["href"].startswith("https://fuckingfast.co/")
     ]
-    return links
+    return links, game_name
 
 def download_file(download_url, output_path):
     response = requests.get(download_url, stream=True, headers=HEADERS)
@@ -83,9 +96,7 @@ def download_file(download_url, output_path):
         log.error("Failed To Download", response.status_code)
         return False
 
-def process_and_download(links, game_url, custom_folder=None):
-    game_name = urlparse(game_url).path.strip('/').split('--')[0] or "Downloaded_Game"
-    
+def process_and_download(links, game_url, game_name, custom_folder=None):
     if custom_folder:
         downloads_folder = os.path.join(custom_folder, game_name)
     else:
@@ -147,7 +158,8 @@ def main():
     if not url:
         log.error("No URL provided", "Exiting...")
         return
-    ff_links = get_fuckingfast_links(url)
+    
+    ff_links, game_name = get_game_info(url)
 
     if not ff_links:
         log.error("No fuckingfast.co links found", "Exiting...")
@@ -158,10 +170,11 @@ def main():
     print(output)
     pyperclip.copy(output)
     log.success("All Links Copied To Clipboard", len(ff_links))
+    log.info("Game Name", game_name)
 
     if args.download:
         log.info("Auto-download switch enabled", "Starting downloads...")
-        process_and_download(ff_links, url, custom_folder=args.output)
+        process_and_download(ff_links, url, game_name, custom_folder=args.output)
     else:
         log.warning("Auto-download not enabled", "Use -d or --download to download automatically")
 

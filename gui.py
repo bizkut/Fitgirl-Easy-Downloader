@@ -346,7 +346,7 @@ class FitGirlDownloaderApp:
             if item_id in self.torrent_queue_items:
                 torrent_info = self.torrent_queue_items[item_id]
                 if self.torrent_manager:
-                    self.torrent_manager.remove(torrent_info['torrent_id'], delete_files=True)
+                    self.torrent_manager.remove(torrent_info['torrent_id'], delete_files=False)
                 del self.torrent_queue_items[item_id]
                 self.queue_tree.delete(item_id)
                 self.on_tree_select(None)
@@ -359,23 +359,6 @@ class FitGirlDownloaderApp:
             
             if item['status'] == 'Downloading':
                 self.abort_flag = True
-            
-            # Wait briefly if downloading to release file locks before deleting
-            def delete_files():
-                if item['status'] == 'Downloading':
-                    time.sleep(1) 
-                game_name = item['name']
-                base_dir = self.config_manager.get_download_dir()
-                download_dir = os.path.join(base_dir, game_name)
-                
-                try:
-                    if os.path.exists(download_dir):
-                        shutil.rmtree(download_dir)
-                        print(f"Deleted folder: {download_dir}")
-                except Exception as e:
-                    print(f"Error deleting folder: {e}")
-
-            threading.Thread(target=delete_files, daemon=True).start()
             
             del self.queue_items[item_id]
             self.queue_tree.delete(item_id)

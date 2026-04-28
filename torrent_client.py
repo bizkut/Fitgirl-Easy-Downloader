@@ -77,7 +77,7 @@ class TorrentManager:
         self.seed_after_download = config.get('seed_after_download', True)
         self.seed_ratio_limit = config.get('seed_ratio_limit', 1.0)
 
-    def add_magnet(self, magnet_uri, save_path, name=None):
+    def add_magnet(self, magnet_uri, save_path, name=None, **kwargs):
         """
         Add a magnet link for concurrent download.
 
@@ -107,8 +107,8 @@ class TorrentManager:
                 'name': name or 'Fetching metadata...',
                 'added_time': time.time(),
                 'user_stopped': False,
-                'total_uploaded_at_finish': 0,
-                'total_downloaded': 0,
+                'initial_upload': kwargs.get('initial_upload', 0),
+                'initial_download': kwargs.get('initial_download', 0),
             }
 
         return info_hash
@@ -143,9 +143,10 @@ class TorrentManager:
             remaining = s.total_wanted - s.total_wanted_done
             eta = remaining / s.download_rate if s.download_rate > 0 else 0
 
-        # Seed ratio
-        total_downloaded = s.total_wanted_done if s.total_wanted_done > 0 else s.all_time_download
-        seed_ratio = (s.all_time_upload / total_downloaded) if total_downloaded > 0 else 0.0
+        # Seed ratio calculation with persistence
+        current_upload = s.all_time_upload + entry.get('initial_upload', 0)
+        current_download = (s.total_wanted_done if s.total_wanted_done > 0 else s.all_time_download) + entry.get('initial_download', 0)
+        seed_ratio = (current_upload / current_download) if current_download > 0 else 0.0
 
         # Check if we should stop seeding (ratio reached)
         is_finished = s.is_finished
@@ -171,10 +172,10 @@ class TorrentManager:
             'upload_rate': s.upload_rate,
             'num_peers': s.num_peers,
             'num_seeds': s.num_seeds,
-            'total_downloaded': s.total_wanted_done,
+            'total_downloaded': current_download,
             'total_size': s.total_wanted,
             'eta': eta,
-            'total_uploaded': s.all_time_upload,
+            'total_uploaded': current_upload,
             'seed_ratio': seed_ratio,
             'is_finished': is_finished,
             'is_seeding': is_seeding,

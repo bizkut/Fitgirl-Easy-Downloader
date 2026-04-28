@@ -300,7 +300,13 @@ class FitGirlDownloaderApp:
             if self.torrent_manager and 'magnet_link' in item:
                 base_dir = self.config_manager.get_download_dir()
                 try:
-                    torrent_id = self.torrent_manager.add_magnet(item['magnet_link'], base_dir, name=item['name'])
+                    torrent_id = self.torrent_manager.add_magnet(
+                        item['magnet_link'], 
+                        base_dir, 
+                        name=item['name'],
+                        initial_upload=item.get('total_uploaded', 0),
+                        initial_download=item.get('total_downloaded', 0)
+                    )
                     item['torrent_id'] = torrent_id
                     
                     # If it was paused, pause it again
@@ -839,6 +845,8 @@ class FitGirlDownloaderApp:
             torrent_info['is_paused'] = status['is_paused']
             torrent_info['is_finished'] = status['is_finished']
             torrent_info['is_seeding'] = status['is_seeding']
+            torrent_info['total_uploaded'] = status['total_uploaded']
+            torrent_info['total_downloaded'] = status['total_downloaded']
 
             # Update name once metadata arrives
             if status['has_metadata'] and status['name'] != torrent_info['name']:
@@ -923,6 +931,7 @@ class FitGirlDownloaderApp:
 
     def _on_close(self):
         """Clean up torrent session on app exit."""
+        self.save_queue() # Save one last time to capture latest progress
         if self.torrent_manager:
             try:
                 self.torrent_manager.shutdown()

@@ -435,6 +435,7 @@ class FitGirlDownloaderApp:
             self.queue_tree.delete(item_id)
             self.save_queue()
             self.on_tree_select(None)
+            self._update_action_buttons_state()
 
     def change_dir(self):
         self.choose_download_dir()
@@ -478,6 +479,7 @@ class FitGirlDownloaderApp:
             if not links:
                 self.root.after(0, lambda: messagebox.showerror("Error", "No fuckingfast.co links found on this page."))
                 self.root.after(0, lambda: self.btn_fetch.config(state=tk.NORMAL))
+                self.root.after(0, self._update_action_buttons_state)
                 return
 
             # Extract info
@@ -574,6 +576,7 @@ class FitGirlDownloaderApp:
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to fetch information:\n{e}"))
             self.root.after(0, lambda: self.btn_fetch.config(state=tk.NORMAL))
+            self.root.after(0, self._update_action_buttons_state)
 
     def _update_ui_with_fetch(self):
         data = self.fetched_data
@@ -593,11 +596,7 @@ class FitGirlDownloaderApp:
         
         self.btn_fetch.config(state=tk.NORMAL)
         self.btn_open_page.config(state=tk.NORMAL)
-        self.btn_queue.config(state=tk.NORMAL)
-        if data.get('magnet_link'):
-            self.btn_torrent.config(state=tk.NORMAL)
-        else:
-            self.btn_torrent.config(state=tk.DISABLED)
+        self._update_action_buttons_state()
 
     def open_game_page(self):
         if self.fetched_data and 'url' in self.fetched_data:
@@ -632,8 +631,7 @@ class FitGirlDownloaderApp:
                     'magnet_link': magnet,
                 }
                 self.save_queue()
-                
-                self.btn_torrent.config(state=tk.DISABLED)
+                self._update_action_buttons_state()
                 
             except Exception as e:
                 messagebox.showerror("Torrent Error", f"Failed to start torrent:\n{e}")
@@ -694,13 +692,50 @@ class FitGirlDownloaderApp:
 
     def add_to_queue(self):
         if self.fetched_data:
+            # Check for duplicates again just in case
+            url = self.fetched_data.get('url')
+            if any(item.get('url') == url for item in self.queue_items.values()):
+                messagebox.showinfo("Already in Queue", "This game is already in your download queue.")
+                return
+
             item_id = self.queue_tree.insert("", tk.END, values=(self.fetched_data['name'], "Queued"))
-            self.fetched_data['tree_id'] = item_id
-            self.fetched_data['status'] = 'Queued'
-            self.queue_items[item_id] = self.fetched_data
+            # Make a copy to avoid reference issues
+            queue_data = self.fetched_data.copy()
+            queue_data['tree_id'] = item_id
+            queue_data['status'] = 'Queued'
+            self.queue_items[item_id] = queue_data
             self.save_queue()
-            self.fetched_data = None
+            self._update_action_buttons_state()
+
+    def _update_action_buttons_state(self):
+        if not hasattr(self, 'fetched_data') or not self.fetched_data:
             self.btn_queue.config(state=tk.DISABLED)
+            self.btn_torrent.config(state=tk.DISABLED)
+            return
+
+        url = self.fetched_data.get('url')
+        magnet = self.fetched_data.get('magnet_link')
+        
+        # Check if in regular queue
+        in_regular = any(item.get('url') == url for item in self.queue_items.values())
+        
+        # Check if in torrent queue
+        in_torrent = False
+        if magnet:
+            in_torrent = any(item.get('magnet_link') == magnet for item in self.torrent_queue_items.values())
+
+        if in_regular:
+            self.btn_queue.config(state=tk.DISABLED)
+        else:
+            self.btn_queue.config(state=tk.NORMAL)
+
+        if magnet:
+            if in_torrent:
+                self.btn_torrent.config(state=tk.DISABLED)
+            else:
+                self.btn_torrent.config(state=tk.NORMAL)
+        else:
+            self.btn_torrent.config(state=tk.DISABLED)
 
     def start_download_worker(self):
         threading.Thread(target=self._download_worker, daemon=True).start()

@@ -112,6 +112,7 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
           cp icon.png AppDir/usr/share/icons/hicolor/128x128/apps/icon.png
 
+          cp icon.png AppDir/icon.png
           ln -s usr/bin/FitGirl\ Downloader AppDir/AppRun
           ln -s usr/share/applications/fitgirl-downloader.desktop AppDir/fitgirl-downloader.desktop
           ln -s usr/share/icons/hicolor/128x128/apps/icon.png AppDir/.DirIcon

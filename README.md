@@ -78,7 +78,7 @@ Head to the [Releases](../../releases/latest) page and download the archive for 
 3. Find your standalone Desktop Application in the `dist/` folder!
 
 ### Windows libtorrent DLL errors
-If a Windows build reports a libtorrent DLL load error, rebuild from a clean environment with the current `build.bat`. The Windows requirements include `libtorrent-windows-dll`, which supplies `libcrypto-1_1-x64.dll` and `libssl-1_1-x64.dll`, and the PyInstaller hook bundles those DLLs with the app. Windows releases use PyInstaller `onedir` with `--contents-directory "."`, so the support files sit beside the exe instead of in an `_internal` folder.
+If a Windows build reports a libtorrent DLL load error, rebuild from a clean environment with the current `build.bat`. The Windows requirements include `libtorrent-windows-dll`, which supplies `libcrypto-1_1-x64.dll` and `libssl-1_1-x64.dll`, and the PyInstaller hook bundles those DLLs with the app. Windows releases use PyInstaller `onedir`, so users should extract the whole `FitGirl Downloader` folder and run the exe beside its `_internal` support folder.
 
 ## Features
 - **Cross-platform GUI Application** with live queue management.

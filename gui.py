@@ -20,7 +20,8 @@ def _configure_libtorrent_dll_paths():
     if sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
         return
 
-    base_paths = [os.path.dirname(sys.executable)]
+    exe_dir = os.path.dirname(sys.executable)
+    base_paths = [exe_dir, os.path.join(exe_dir, "_internal")]
     if hasattr(sys, "_MEIPASS"):
         base_paths.append(sys._MEIPASS)
 
@@ -1073,6 +1074,18 @@ class FitGirlDownloaderApp:
 
 
 if __name__ == "__main__":
+    if "--self-test-libtorrent" in sys.argv:
+        if not HAS_LIBTORRENT:
+            print(f"libtorrent import failed: {TORRENT_IMPORT_ERROR}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            manager = TorrentManager(config=ConfigManager().get_torrent_config())
+            manager.shutdown()
+        except Exception as e:
+            print(f"libtorrent initialization failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
+
     root = tk.Tk()
     app = FitGirlDownloaderApp(root)
     root.mainloop()

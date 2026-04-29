@@ -29,7 +29,23 @@ jobs:
           python -c "import libtorrent as lt; print('libtorrent', lt.__version__)"
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --clean --onedir --contents-directory "." --windowed --additional-hooks-dir hooks --add-data "img;img" --hidden-import libtorrent --collect-all libtorrent --icon "img\icon.jpg" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onedir --windowed --additional-hooks-dir hooks --add-data "img;img" --hidden-import libtorrent --collect-all libtorrent --icon "img\icon.jpg" --name "FitGirl Downloader" gui.py
+      - name: Smoke test packaged Windows exe
+        shell: pwsh
+        run: |
+          $appDir = "dist\\FitGirl Downloader"
+          $internalDir = Join-Path $appDir "_internal"
+          if (!(Test-Path $internalDir)) {
+            throw "Missing _internal folder in Windows build."
+          }
+          $libtorrentFiles = Get-ChildItem -Path $internalDir -Recurse -File | Where-Object {
+            $_.Name -like "*libtorrent*" -or $_.Name -in @("libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll")
+          }
+          $libtorrentFiles | ForEach-Object { Write-Host $_.FullName }
+          if (!$libtorrentFiles) {
+            throw "No libtorrent/OpenSSL runtime files were collected."
+          }
+          & "$appDir\\FitGirl Downloader.exe" --self-test-libtorrent
       - name: Zip Windows Build
         shell: pwsh
         run: |
@@ -59,6 +75,9 @@ jobs:
       - name: Build with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
+      - name: Smoke test packaged macOS app
+        run: |
+          "dist/FitGirl Downloader.app/Contents/MacOS/FitGirl Downloader" --self-test-libtorrent
       - name: Ad-hoc sign and zip macOS app
         run: |
           codesign --force --deep --sign - "dist/FitGirl Downloader.app"
@@ -88,13 +107,16 @@ jobs:
       - name: Build with PyInstaller (onefile)
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
+      - name: Smoke test packaged Linux executable
+        run: |
+          "dist/FitGirl Downloader" --self-test-libtorrent
       - name: Tar Linux Build
         run: |
           mkdir -p dist/linux
           tar -czf dist/linux/fitgirl-downloader-linux.tar.gz -C dist "FitGirl Downloader"
       - name: Build with PyInstaller (onedir for AppImage)
         run: |
-          pyinstaller --noconfirm --clean --onedir --contents-directory "." --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --distpath dist_onedir --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onedir --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --distpath dist_onedir --name "FitGirl Downloader" gui.py
       - name: Create AppImage
         run: |
           wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"

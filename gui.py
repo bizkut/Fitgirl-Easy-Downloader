@@ -16,8 +16,25 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
+def _configure_libtorrent_dll_paths():
+    if sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
+        return
+
+    base_paths = [os.path.dirname(sys.executable)]
+    if hasattr(sys, "_MEIPASS"):
+        base_paths.append(sys._MEIPASS)
+
+    for base_path in base_paths:
+        for dll_path in (base_path, os.path.join(base_path, "libtorrent")):
+            if os.path.isdir(dll_path):
+                try:
+                    os.add_dll_directory(dll_path)
+                except OSError:
+                    pass
+
 # Built-in torrent client
 TORRENT_IMPORT_ERROR = None
+_configure_libtorrent_dll_paths()
 try:
     from torrent_client import TorrentManager
     HAS_LIBTORRENT = True

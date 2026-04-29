@@ -27,7 +27,7 @@ The GUI includes a built-in torrent client powered by [libtorrent](https://libto
 - **Live progress**: Speed, peers, ETA, and seed ratio displayed in the queue.
 - **Pause/Resume/Cancel**: Full control over each torrent.
 - **Auto-seeding**: Seeds up to a configurable ratio (default 1.0x), then auto-stops.
-- **Internal-only torrent downloads**: `libtorrent==2.0.11` is installed and bundled for Windows, macOS, and Linux builds. If it is missing, the app reports the dependency error instead of opening an external torrent client.
+- **Internal-only torrent downloads**: `libtorrent==2.0.11` is installed and bundled for Windows, macOS, and Linux builds. Windows builds also include `libtorrent-windows-dll` for libtorrent's OpenSSL DLLs. If the torrent engine is missing, the app reports the dependency error instead of opening an external torrent client.
 
 ### Option 2: CLI All-in-One Command
 You can fetch links and start downloading immediately using `main.py`:
@@ -76,6 +76,9 @@ Head to the [Releases](../../releases/latest) page and download the archive for 
    - **macOS**: Run `./build.sh`
    - **Linux**: Run `./build_linux.sh`
 3. Find your standalone Desktop Application in the `dist/` folder!
+
+### Windows libtorrent DLL errors
+If a Windows build reports a libtorrent DLL load error, rebuild from a clean environment with the current `build.bat`. The Windows requirements include `libtorrent-windows-dll`, which supplies `libcrypto-1_1-x64.dll` and `libssl-1_1-x64.dll`, and the PyInstaller hook bundles those DLLs with the app. Windows releases use PyInstaller `onedir` with `--contents-directory "."`, so the support files sit beside the exe instead of in an `_internal` folder.
 
 ## Features
 - **Cross-platform GUI Application** with live queue management.

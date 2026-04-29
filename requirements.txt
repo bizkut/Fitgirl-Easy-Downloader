@@ -5,4 +5,5 @@ colorama
 pyperclip
 pyinstaller
 libtorrent==2.0.11
+libtorrent-windows-dll==0.0.3; platform_system == "Windows"
 Pillow

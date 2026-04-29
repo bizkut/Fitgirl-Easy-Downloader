@@ -22,7 +22,7 @@ then
 fi
 
 # Run PyInstaller
-pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
+pyinstaller --noconfirm --clean --onedir --contents-directory "." --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
 
 echo ""
 echo "Build complete! Your macOS App is located in the 'dist' folder."

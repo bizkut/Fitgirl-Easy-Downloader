@@ -25,16 +25,17 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pillow
+          pip install -r requirements.txt
+          python -c "import libtorrent as lt; print('libtorrent', lt.__version__)"
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img;img" --icon "img\icon.jpg" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onedir --contents-directory "." --windowed --additional-hooks-dir hooks --add-data "img;img" --hidden-import libtorrent --collect-all libtorrent --icon "img\icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Zip Windows Build
         shell: pwsh
         run: |
           $dstDir = "dist\\windows"
           New-Item -ItemType Directory -Force -Path $dstDir
-          Compress-Archive -Path "dist\\FitGirl Downloader.exe" -DestinationPath "$dstDir\\fitgirl-downloader-windows.zip" -Force
+          Compress-Archive -Path "dist\\FitGirl Downloader\\*" -DestinationPath "$dstDir\\fitgirl-downloader-windows.zip" -Force
         id: zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -53,10 +54,11 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pillow
+          pip install -r requirements.txt
+          python -c "import libtorrent as lt; print('libtorrent', lt.__version__)"
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onefile --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Ad-hoc sign and zip macOS app
         run: |
           codesign --force --deep --sign - "dist/FitGirl Downloader.app"
@@ -81,17 +83,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip tar wget
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pillow
+          pip install -r requirements.txt
+          python -c "import libtorrent as lt; print('libtorrent', lt.__version__)"
       - name: Build with PyInstaller (onefile)
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onefile --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Tar Linux Build
         run: |
           mkdir -p dist/linux
           tar -czf dist/linux/fitgirl-downloader-linux.tar.gz -C dist "FitGirl Downloader"
       - name: Build with PyInstaller (onedir for AppImage)
         run: |
-          pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --icon "img/icon.jpg" --distpath dist_onedir --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --clean --onedir --contents-directory "." --windowed --additional-hooks-dir hooks --add-data "img:img" --hidden-import libtorrent --collect-all libtorrent --icon "img/icon.jpg" --distpath dist_onedir --name "FitGirl Downloader" gui.py
       - name: Create AppImage
         run: |
           wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"

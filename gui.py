@@ -16,11 +16,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
-# Built-in torrent client (graceful fallback if libtorrent not installed)
+# Built-in torrent client
+TORRENT_IMPORT_ERROR = None
 try:
     from torrent_client import TorrentManager
     HAS_LIBTORRENT = True
-except ImportError:
+except ImportError as e:
+    TORRENT_IMPORT_ERROR = e
     HAS_LIBTORRENT = False
 
 def resource_path(relative_path):
@@ -640,13 +642,10 @@ class FitGirlDownloaderApp:
             except Exception as e:
                 messagebox.showerror("Torrent Error", f"Failed to start torrent:\n{e}")
         else:
-            # Fallback: open in external torrent client
-            if sys.platform == "win32":
-                os.startfile(magnet)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", magnet])
-            else:
-                subprocess.Popen(["xdg-open", magnet])
+            message = "The internal libtorrent client is not available."
+            if TORRENT_IMPORT_ERROR:
+                message += f"\n\nImport error: {TORRENT_IMPORT_ERROR}"
+            messagebox.showerror("Torrent Error", message)
 
     def _load_image(self, url):
         try:
@@ -725,7 +724,7 @@ class FitGirlDownloaderApp:
         
         # Check if in torrent queue
         in_torrent = False
-        if magnet:
+        if magnet and self.torrent_manager:
             in_torrent = any(item.get('magnet_link') == magnet for item in self.torrent_queue_items.values())
 
         if in_regular:
@@ -763,7 +762,7 @@ class FitGirlDownloaderApp:
             
             item['status'] = 'Downloading'
             self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Downloading"))
-            self.root.after(0, lambda i=item['name']: self.lbl_current_download.config(text=f"Currently Downloading: {i}"))
+            self.root.after(0, lambda i=item['name']: self._set_current_download_text(f"Currently Downloading: {i}"))
             self.root.after(0, lambda: self.on_tree_select(None))
             
             game_name = item['name']
@@ -772,57 +771,56 @@ class FitGirlDownloaderApp:
             download_dir = os.path.join(base_dir, game_name)
             os.makedirs(download_dir, exist_ok=True)
             
+            download_plan = []
             total_links = len(links)
+            self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Preparing downloads..."))
+
             for idx, link in enumerate(links):
                 if self.abort_flag:
                     break
-                    
+
                 try:
-                    self.root.after(0, lambda i=item_id, c=idx+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Downloading {c}/{t}"))
-                    
-                    response = requests.get(link, headers=HEADERS, timeout=30)
-                    if response.status_code != 200:
-                        continue
-                    
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    meta_title = soup.find('meta', attrs={'name': 'title'})
-                    file_name = meta_title['content'] if meta_title else f"part_{idx+1}.rar"
-                    
-                    script_tags = soup.find_all('script')
-                    download_url = None
-                    for script in script_tags:
-                        if 'function download' in script.text:
-                            match = re.search(r'window\.open\(["\'](https?://[^\s"\'\)]+)', script.text)
-                            if match:
-                                download_url = match.group(1)
-                                break
-                    
-                    if download_url:
-                        output_path = os.path.join(download_dir, file_name)
-                        
-                        file_mode = 'wb'
-                        existing_size = 0
-                        
-                        head_response = requests.head(download_url, headers=HEADERS, allow_redirects=True, timeout=15)
-                        remote_size = int(head_response.headers.get('content-length', 0))
-                        
-                        if os.path.exists(output_path):
-                            existing_size = os.path.getsize(output_path)
-                            if remote_size > 0 and existing_size == remote_size:
-                                print(f"Skipping {file_name}, already completed.")
-                                continue
-                            elif remote_size > 0 and existing_size < remote_size:
-                                file_mode = 'ab'
-                        
-                        # self.root.after(0, lambda f=file_name: self.lbl_current_download.config(text=f"Downloading -> {f[:40]}..."))
-                        # self.root.after(0, lambda: self._update_progress(0, "0% | 0.00 B/0.00 B [00:00<00:00, 0.00 B/s]", item_id))
-                        
-                        success = self._download_file(download_url, output_path, file_mode, existing_size, remote_size, item_id, idx+1, total_links)
-                        if not success: # abort flag was set
-                            break
-                            
+                    self.root.after(0, lambda i=item_id, c=idx+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing {c}/{t}"))
+                    plan_item = self._resolve_fuckingfast_download(link, download_dir, idx)
+                    if plan_item:
+                        download_plan.append(plan_item)
                 except Exception as e:
-                    print(f"Error downloading {link}: {e}")
+                    print(f"Error preparing {link}: {e}")
+
+            batch_total_size = sum(p['remote_size'] for p in download_plan if p['remote_size'] > 0)
+            batch_downloaded = 0
+
+            for plan_item in download_plan:
+                if plan_item['remote_size'] > 0:
+                    batch_downloaded += min(plan_item['existing_size'], plan_item['remote_size'])
+
+            batch_start_time = time.time()
+            session_start_downloaded = batch_downloaded
+
+            for idx, plan_item in enumerate(download_plan):
+                if self.abort_flag:
+                    break
+
+                if plan_item['remote_size'] > 0 and plan_item['existing_size'] >= plan_item['remote_size']:
+                    print(f"Skipping {plan_item['file_name']}, already completed.")
+                    continue
+
+                success, batch_downloaded = self._download_file(
+                    plan_item['download_url'],
+                    plan_item['output_path'],
+                    plan_item['file_mode'],
+                    plan_item['existing_size'],
+                    plan_item['remote_size'],
+                    item_id,
+                    idx + 1,
+                    len(download_plan),
+                    batch_downloaded,
+                    batch_total_size,
+                    batch_start_time,
+                    session_start_downloaded
+                )
+                if not success:
+                    break
             
             if not self.abort_flag:
                 item['status'] = 'Completed'
@@ -831,12 +829,63 @@ class FitGirlDownloaderApp:
             
             self.current_download_id = None
             self.is_downloading = False
-            self.root.after(0, lambda: self.lbl_current_download.config(text="Currently Downloading: None"))
-            self.root.after(0, lambda: self.progress_var.set(0))
-            self.root.after(0, lambda: self.lbl_progress_text.config(text="0%"))
+            self.root.after(0, lambda: self._set_current_download_text("Currently Downloading: None"))
+            self.root.after(0, self._reset_progress_widgets)
             self.root.after(0, lambda: self.on_tree_select(None))
 
-    def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id, part_idx, total_parts):
+    def _set_current_download_text(self, text):
+        if hasattr(self, 'lbl_current_download'):
+            self.lbl_current_download.config(text=text)
+
+    def _reset_progress_widgets(self):
+        if hasattr(self, 'progress_var'):
+            self.progress_var.set(0)
+        if hasattr(self, 'lbl_progress_text'):
+            self.lbl_progress_text.config(text="0%")
+
+    def _resolve_fuckingfast_download(self, link, download_dir, idx):
+        response = requests.get(link, headers=HEADERS, timeout=30)
+        if response.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        meta_title = soup.find('meta', attrs={'name': 'title'})
+        file_name = meta_title['content'] if meta_title else f"part_{idx+1}.rar"
+        file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name).strip() or f"part_{idx+1}.rar"
+
+        download_url = None
+        for script in soup.find_all('script'):
+            if 'function download' in script.text:
+                match = re.search(r'window\.open\(["\'](https?://[^\s"\'\)]+)', script.text)
+                if match:
+                    download_url = match.group(1)
+                    break
+
+        if not download_url:
+            return None
+
+        output_path = os.path.join(download_dir, file_name)
+        file_mode = 'wb'
+        existing_size = 0
+
+        head_response = requests.head(download_url, headers=HEADERS, allow_redirects=True, timeout=15)
+        remote_size = int(head_response.headers.get('content-length', 0))
+
+        if os.path.exists(output_path):
+            existing_size = os.path.getsize(output_path)
+            if remote_size > 0 and existing_size < remote_size:
+                file_mode = 'ab'
+
+        return {
+            'download_url': download_url,
+            'output_path': output_path,
+            'file_name': file_name,
+            'file_mode': file_mode,
+            'existing_size': existing_size,
+            'remote_size': remote_size,
+        }
+
+    def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id, part_idx, total_parts, batch_downloaded, batch_total_size, batch_start_time, session_start_downloaded):
         headers = HEADERS.copy()
         if mode == 'ab' and existing_size > 0:
             headers['Range'] = f'bytes={existing_size}-'
@@ -844,6 +893,8 @@ class FitGirlDownloaderApp:
         response = requests.get(download_url, stream=True, headers=headers, timeout=60)
         if response.status_code in [200, 206]:
             if response.status_code == 200:
+                if mode == 'ab' and existing_size > 0 and total_size > 0:
+                    batch_downloaded -= min(existing_size, total_size)
                 mode = 'wb'
                 downloaded = 0
             else:
@@ -872,24 +923,38 @@ class FitGirlDownloaderApp:
             with open(output_path, mode) as f:
                 for data in response.iter_content(block_size):
                     if self.abort_flag:
-                        return False
+                        return False, batch_downloaded
                         
                     f.write(data)
                     downloaded += len(data)
+                    batch_downloaded += len(data)
                     
                     current_time = time.time()
-                    if current_time - last_update_time > 0.5 or downloaded == total_size:
+                    if current_time - last_update_time > 0.5 or (total_size > 0 and downloaded == total_size):
                         last_update_time = current_time
-                        if total_size > 0:
+                        elapsed_time = current_time - batch_start_time
+                        transferred_this_session = batch_downloaded - session_start_downloaded
+                        speed = transferred_this_session / elapsed_time if elapsed_time > 0 else 0
+
+                        if batch_total_size > 0:
+                            progress = (batch_downloaded / batch_total_size) * 100
+                            remaining = max(batch_total_size - batch_downloaded, 0)
+                            eta = remaining / speed if speed > 0 else 0
+                            size_text = f"{format_size(batch_downloaded)}/{format_size(batch_total_size)}"
+                        elif total_size > 0:
                             progress = (downloaded / total_size) * 100
-                            elapsed_time = current_time - start_time
-                            speed = (downloaded - existing_size if response.status_code == 206 else downloaded) / elapsed_time if elapsed_time > 0 else 0
-                            eta = (total_size - downloaded) / speed if speed > 0 else 0
-                            
-                            progress_text = f"[{part_idx}/{total_parts}] {progress:.0f}% | {format_size(downloaded)}/{format_size(total_size)} | {format_size(speed)}/s | ETA {format_time(eta)}"
-                            self.root.after(0, lambda p=progress_text: self.queue_tree.exists(item_id) and self.queue_tree.set(item_id, "status", p))
-            return True
-        return False
+                            remaining = max(total_size - downloaded, 0)
+                            eta = remaining / speed if speed > 0 else 0
+                            size_text = f"{format_size(downloaded)}/{format_size(total_size)}"
+                        else:
+                            progress = 0
+                            eta = 0
+                            size_text = format_size(batch_downloaded)
+
+                        progress_text = f"[{part_idx}/{total_parts}] {progress:.0f}% | {size_text} | {format_size(speed)}/s | ETA {format_time(eta)}"
+                        self.root.after(0, lambda p=progress_text: self.queue_tree.exists(item_id) and self.queue_tree.set(item_id, "status", p))
+            return True, batch_downloaded
+        return False, batch_downloaded
 
     # ─── Torrent Status Polling ────────────────────────────────────────
 

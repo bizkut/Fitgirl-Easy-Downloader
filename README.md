@@ -6,7 +6,7 @@ This Tool Helps To Download Multiple Files Easily From fitgirl-repacks.site Thro
 
 Ensure you have the following installed before running the script :
 
-`Python 3.8+`
+`Python 3.9+`
 
 ```bash
 pip install -r requirements.txt
@@ -27,7 +27,7 @@ The GUI includes a built-in torrent client powered by [libtorrent](https://libto
 - **Live progress**: Speed, peers, ETA, and seed ratio displayed in the queue.
 - **Pause/Resume/Cancel**: Full control over each torrent.
 - **Auto-seeding**: Seeds up to a configurable ratio (default 1.0x), then auto-stops.
-- **Graceful fallback**: If `libtorrent` is not installed, the button opens the magnet link in your default external torrent client instead.
+- **Internal-only torrent downloads**: `libtorrent==2.0.11` is installed and bundled for Windows, macOS, and Linux builds. If it is missing, the app reports the dependency error instead of opening an external torrent client.
 
 ### Option 2: CLI All-in-One Command
 You can fetch links and start downloading immediately using `main.py`:
@@ -70,7 +70,7 @@ Head to the [Releases](../../releases/latest) page and download the archive for 
 > ```
 
 ### Build from Source
-1. Install requirements: `pip install -r requirements.txt pillow`
+1. Install requirements: `pip install -r requirements.txt`
 2. Run the build script for your OS:
    - **Windows**: Run `build.bat`
    - **macOS**: Run `./build.sh`

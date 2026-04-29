@@ -29,7 +29,14 @@ jobs:
       - name: Zip Windows Build
         shell: pwsh
         run: |
-          if (Test-Path dist) { Compress-Archive -Path dist\"FitGirl Downloader\"\* -DestinationPath dist\windows\fitgirl-downloader-windows.zip -Force }
+          if (Test-Path dist) {
+            $src = "dist\\FitGirl Downloader\\*"
+            $dstDir = "dist\\windows"
+            New-Item -ItemType Directory -Force -Path $dstDir
+            Compress-Archive -Path $src -DestinationPath "$dstDir\\fitgirl-downloader-windows.zip" -Force
+          } else {
+            Write-Host "Windows build folder not found, skipping zip."
+          }
         id: zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -103,17 +110,17 @@ jobs:
           draft: false
           prerelease: false
       - name: Download Windows Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: windows-artifact
           path: ./windows
       - name: Download Mac Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: macos-artifact
           path: ./macos
       - name: Download Linux Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linux-artifact
           path: ./linux

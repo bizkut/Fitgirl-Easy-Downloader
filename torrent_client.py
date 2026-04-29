@@ -127,8 +127,7 @@ class TorrentManager:
             entry = self._torrents.get(torrent_id)
             if not entry:
                 return None
-
-        handle = entry['handle']
+            handle = entry['handle']
         s = handle.status()
 
         # Update name once metadata is received

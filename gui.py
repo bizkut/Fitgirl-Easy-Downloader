@@ -58,7 +58,7 @@ class ConfigManager:
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, OSError):
                 pass
         return {}
 
@@ -127,6 +127,9 @@ class FitGirlDownloaderApp:
         self.current_download_id = None
         self.abort_flag = False
         self.is_downloading = False
+        
+        # Thread-safe queue access
+        self._queue_lock = threading.Lock()
         
         # Torrent client (concurrent downloads)
         self.torrent_manager = None
@@ -326,15 +329,6 @@ class FitGirlDownloaderApp:
         if selected:
             item_id = selected[0]
             
-            # Immediately refresh statuses to show detailed info for selected item
-            if item_id in self.torrent_queue_items:
-                # Torrent polling will pick it up in next tick (max 500ms)
-                pass
-            elif item_id in self.queue_items:
-                # For regular items, we can force a status text update if needed
-                # but currently they are already fairly simple.
-                pass
-            
             # Check if it's a torrent item
             if item_id in self.torrent_queue_items:
                 torrent_info = self.torrent_queue_items[item_id]
@@ -363,10 +357,7 @@ class FitGirlDownloaderApp:
                 self.btn_stop.config(state=tk.DISABLED)
                 self.btn_resume.config(state=tk.DISABLED)
             
-            if status != 'Completed':
-                self.btn_remove.config(state=tk.NORMAL)
-            else:
-                self.btn_remove.config(state=tk.NORMAL)
+            self.btn_remove.config(state=tk.NORMAL)
         else:
             self.btn_stop.config(state=tk.DISABLED)
             self.btn_resume.config(state=tk.DISABLED)
@@ -475,7 +466,7 @@ class FitGirlDownloaderApp:
 
     def _fetch_thread(self, url):
         try:
-            r = requests.get(url, headers=HEADERS)
+            r = requests.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
             
@@ -656,13 +647,13 @@ class FitGirlDownloaderApp:
 
     def _load_image(self, url):
         try:
-            r = requests.get(url)
+            r = requests.get(url, timeout=15)
             img_data = r.content
             img = Image.open(BytesIO(img_data))
             img.thumbnail((150, 200)) # Resize to fit nicely
             photo = ImageTk.PhotoImage(img)
             self.root.after(0, lambda p=photo: self._set_image(p))
-        except:
+        except Exception:
             pass
 
     def _set_image(self, photo):
@@ -675,11 +666,11 @@ class FitGirlDownloaderApp:
             if os.path.exists(img_path):
                 img = Image.open(img_path)
             else:
-                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2016/08/cropped-icon-32x32.jpg")
+                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2016/08/cropped-icon-32x32.jpg", timeout=10)
                 img = Image.open(BytesIO(r.content))
             photo = ImageTk.PhotoImage(img)
             self.root.after(0, lambda p=photo: self.root.iconphoto(False, p))
-        except:
+        except Exception:
             pass
 
     def _load_fitgirl_image(self):
@@ -688,12 +679,12 @@ class FitGirlDownloaderApp:
             if os.path.exists(img_path):
                 img = Image.open(img_path)
             else:
-                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2024/05/support2.jpg")
+                r = requests.get("https://fitgirl-repacks.site/wp-content/uploads/2024/05/support2.jpg", timeout=10)
                 img = Image.open(BytesIO(r.content))
             img.thumbnail((150, 200)) # Match thumbnail size logic
             photo = ImageTk.PhotoImage(img)
             self.root.after(0, lambda p=photo: self._set_fitgirl_image(p))
-        except:
+        except Exception:
             pass
 
     def _set_fitgirl_image(self, photo):
@@ -753,7 +744,7 @@ class FitGirlDownloaderApp:
     def _download_worker(self):
         while True:
             item_id = None
-            for key, val in self.queue_items.items():
+            for key, val in list(self.queue_items.items()):
                 if val['status'] == 'Queued':
                     item_id = key
                     break
@@ -786,7 +777,7 @@ class FitGirlDownloaderApp:
                 try:
                     self.root.after(0, lambda i=item_id, c=idx+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Downloading {c}/{t}"))
                     
-                    response = requests.get(link, headers=HEADERS)
+                    response = requests.get(link, headers=HEADERS, timeout=30)
                     if response.status_code != 200:
                         continue
                     
@@ -809,7 +800,7 @@ class FitGirlDownloaderApp:
                         file_mode = 'wb'
                         existing_size = 0
                         
-                        head_response = requests.head(download_url, headers=HEADERS, allow_redirects=True)
+                        head_response = requests.head(download_url, headers=HEADERS, allow_redirects=True, timeout=15)
                         remote_size = int(head_response.headers.get('content-length', 0))
                         
                         if os.path.exists(output_path):
@@ -847,7 +838,7 @@ class FitGirlDownloaderApp:
         if mode == 'ab' and existing_size > 0:
             headers['Range'] = f'bytes={existing_size}-'
             
-        response = requests.get(download_url, stream=True, headers=headers)
+        response = requests.get(download_url, stream=True, headers=headers, timeout=60)
         if response.status_code in [200, 206]:
             if response.status_code == 200:
                 mode = 'wb'

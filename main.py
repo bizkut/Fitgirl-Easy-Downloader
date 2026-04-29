@@ -74,7 +74,7 @@ def get_game_info(url):
     return links, game_name
 
 def download_file(download_url, output_path):
-    response = requests.get(download_url, stream=True, headers=HEADERS)
+    response = requests.get(download_url, stream=True, headers=HEADERS, timeout=60)
     if response.status_code == 200:
         total_size = int(response.headers.get('content-length', 0))
         block_size = 8192

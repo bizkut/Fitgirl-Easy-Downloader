@@ -789,53 +789,78 @@ class FitGirlDownloaderApp:
             download_dir = os.path.join(base_dir, game_name)
             os.makedirs(download_dir, exist_ok=True)
             
-            download_plan = []
             total_links = len(links)
-            self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Preparing downloads..."))
+            download_queue = queue.Queue()
+            batch_lock = threading.Lock()
+            batch_state = {
+                'total_size': 0,
+                'downloaded': 0,
+                'session_start_downloaded': 0,
+                'start_time': time.time(),
+                'resolved_count': 0,
+                'started_downloading': False,
+            }
+            self.root.after(0, lambda i=item_id, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing 1/{t}"))
 
-            for idx, link in enumerate(links):
+            def prepare_downloads():
+                try:
+                    for idx, link in enumerate(links):
+                        if self.abort_flag:
+                            break
+
+                        try:
+                            with batch_lock:
+                                should_show_preparing = not batch_state['started_downloading']
+                            if should_show_preparing:
+                                self.root.after(0, lambda i=item_id, c=idx+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing {c}/{t}"))
+                            plan_item = self._resolve_fuckingfast_download(link, download_dir, idx)
+                            with batch_lock:
+                                batch_state['resolved_count'] = idx + 1
+                                if plan_item and plan_item['remote_size'] > 0:
+                                    batch_state['total_size'] += plan_item['remote_size']
+                                    existing_done = min(plan_item['existing_size'], plan_item['remote_size'])
+                                    batch_state['downloaded'] += existing_done
+                                    batch_state['session_start_downloaded'] += existing_done
+                            if plan_item:
+                                download_queue.put(plan_item)
+                        except Exception as e:
+                            print(f"Error preparing {link}: {e}")
+                            with batch_lock:
+                                batch_state['resolved_count'] = idx + 1
+                finally:
+                    download_queue.put(None)
+
+            threading.Thread(target=prepare_downloads, daemon=True).start()
+
+            while True:
                 if self.abort_flag:
                     break
 
                 try:
-                    self.root.after(0, lambda i=item_id, c=idx+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing {c}/{t}"))
-                    plan_item = self._resolve_fuckingfast_download(link, download_dir, idx)
-                    if plan_item:
-                        download_plan.append(plan_item)
-                except Exception as e:
-                    print(f"Error preparing {link}: {e}")
-
-            batch_total_size = sum(p['remote_size'] for p in download_plan if p['remote_size'] > 0)
-            batch_downloaded = 0
-
-            for plan_item in download_plan:
-                if plan_item['remote_size'] > 0:
-                    batch_downloaded += min(plan_item['existing_size'], plan_item['remote_size'])
-
-            batch_start_time = time.time()
-            session_start_downloaded = batch_downloaded
-
-            for idx, plan_item in enumerate(download_plan):
-                if self.abort_flag:
+                    plan_item = download_queue.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+                if plan_item is None:
                     break
 
                 if plan_item['remote_size'] > 0 and plan_item['existing_size'] >= plan_item['remote_size']:
                     print(f"Skipping {plan_item['file_name']}, already completed.")
                     continue
 
-                success, batch_downloaded = self._download_file(
+                with batch_lock:
+                    batch_state['started_downloading'] = True
+
+                success = self._download_file(
                     plan_item['download_url'],
                     plan_item['output_path'],
                     plan_item['file_mode'],
                     plan_item['existing_size'],
                     plan_item['remote_size'],
                     item_id,
-                    idx + 1,
-                    len(download_plan),
-                    batch_downloaded,
-                    batch_total_size,
-                    batch_start_time,
-                    session_start_downloaded
+                    plan_item['part_idx'],
+                    total_links,
+                    batch_state,
+                    batch_lock
                 )
                 if not success:
                     break
@@ -901,9 +926,10 @@ class FitGirlDownloaderApp:
             'file_mode': file_mode,
             'existing_size': existing_size,
             'remote_size': remote_size,
+            'part_idx': idx + 1,
         }
 
-    def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id, part_idx, total_parts, batch_downloaded, batch_total_size, batch_start_time, session_start_downloaded):
+    def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id, part_idx, total_parts, batch_state, batch_lock):
         headers = HEADERS.copy()
         if mode == 'ab' and existing_size > 0:
             headers['Range'] = f'bytes={existing_size}-'
@@ -912,7 +938,10 @@ class FitGirlDownloaderApp:
         if response.status_code in [200, 206]:
             if response.status_code == 200:
                 if mode == 'ab' and existing_size > 0 and total_size > 0:
-                    batch_downloaded -= min(existing_size, total_size)
+                    with batch_lock:
+                        restarted_bytes = min(existing_size, total_size)
+                        batch_state['downloaded'] -= restarted_bytes
+                        batch_state['session_start_downloaded'] -= restarted_bytes
                 mode = 'wb'
                 downloaded = 0
             else:
@@ -941,11 +970,16 @@ class FitGirlDownloaderApp:
             with open(output_path, mode) as f:
                 for data in response.iter_content(block_size):
                     if self.abort_flag:
-                        return False, batch_downloaded
+                        return False
                         
                     f.write(data)
                     downloaded += len(data)
-                    batch_downloaded += len(data)
+                    with batch_lock:
+                        batch_state['downloaded'] += len(data)
+                        batch_downloaded = batch_state['downloaded']
+                        batch_total_size = batch_state['total_size']
+                        session_start_downloaded = batch_state['session_start_downloaded']
+                        batch_start_time = batch_state['start_time']
                     
                     current_time = time.time()
                     if current_time - last_update_time > 0.5 or (total_size > 0 and downloaded == total_size):
@@ -971,8 +1005,8 @@ class FitGirlDownloaderApp:
 
                         progress_text = f"[{part_idx}/{total_parts}] {progress:.0f}% | {size_text} | {format_size(speed)}/s | ETA {format_time(eta)}"
                         self.root.after(0, lambda p=progress_text: self.queue_tree.exists(item_id) and self.queue_tree.set(item_id, "status", p))
-            return True, batch_downloaded
-        return False, batch_downloaded
+            return True
+        return False
 
     # ─── Torrent Status Polling ────────────────────────────────────────
 

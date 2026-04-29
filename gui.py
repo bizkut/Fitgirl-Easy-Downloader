@@ -798,13 +798,20 @@ class FitGirlDownloaderApp:
                 'session_start_downloaded': 0,
                 'start_time': time.time(),
                 'resolved_count': 0,
+                'part_sizes': {},
+                'standard_part_size': 0,
                 'started_downloading': False,
             }
             self.root.after(0, lambda i=item_id, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing 1/{t}"))
 
             def prepare_downloads():
                 try:
-                    for idx, link in enumerate(links):
+                    prepare_order = list(range(total_links))
+                    if total_links > 1:
+                        prepare_order = [0, total_links - 1] + list(range(1, total_links - 1))
+
+                    for idx in prepare_order:
+                        link = links[idx]
                         if self.abort_flag:
                             break
 
@@ -817,7 +824,11 @@ class FitGirlDownloaderApp:
                             with batch_lock:
                                 batch_state['resolved_count'] = idx + 1
                                 if plan_item and plan_item['remote_size'] > 0:
-                                    batch_state['total_size'] += plan_item['remote_size']
+                                    part_idx = plan_item['part_idx']
+                                    batch_state['part_sizes'][part_idx] = plan_item['remote_size']
+                                    if not batch_state['standard_part_size'] and (part_idx < total_links or total_links == 1):
+                                        batch_state['standard_part_size'] = plan_item['remote_size']
+                                    batch_state['total_size'] = self._estimate_fuckingfast_total_size(batch_state, total_links)
                                     existing_done = min(plan_item['existing_size'], plan_item['remote_size'])
                                     batch_state['downloaded'] += existing_done
                                     batch_state['session_start_downloaded'] += existing_done
@@ -885,6 +896,27 @@ class FitGirlDownloaderApp:
             self.progress_var.set(0)
         if hasattr(self, 'lbl_progress_text'):
             self.lbl_progress_text.config(text="0%")
+
+    @staticmethod
+    def _estimate_fuckingfast_total_size(batch_state, total_parts):
+        part_sizes = batch_state.get('part_sizes', {})
+        standard_size = batch_state.get('standard_part_size', 0)
+        if total_parts <= 0:
+            return sum(part_sizes.values())
+        if total_parts == 1:
+            return part_sizes.get(1, standard_size)
+        if not standard_size:
+            return sum(part_sizes.values())
+
+        estimated_total = 0
+        for part_idx in range(1, total_parts + 1):
+            if part_idx in part_sizes:
+                estimated_total += part_sizes[part_idx]
+            elif part_idx == total_parts:
+                continue
+            else:
+                estimated_total += standard_size
+        return estimated_total
 
     def _resolve_fuckingfast_download(self, link, download_dir, idx):
         response = requests.get(link, headers=HEADERS, timeout=30)

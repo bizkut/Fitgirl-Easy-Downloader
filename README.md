@@ -56,7 +56,20 @@ You can fetch links and start downloading immediately using `main.py`:
    ```
 
 ## Standalone Executables (GUI)
-You can compile the GUI application into a standalone executable (no Python required) for your operating system.
+Pre-built binaries are available for every release — no Python required.
+
+### Download (Recommended)
+Head to the [Releases](../../releases/latest) page and download the archive for your OS:
+- **Windows**: `fitgirl-downloader-windows.zip` → extract and run `FitGirl Downloader.exe`
+- **macOS**: `fitgirl-downloader-macos.zip` → extract and open `FitGirl Downloader.app`
+- **Linux**: `fitgirl-downloader-linux.tar.gz` → extract and run `FitGirl Downloader`
+
+> **macOS note**: The app is ad-hoc signed (no Apple Developer certificate). On first launch, right-click → **Open** to bypass the Gatekeeper warning. Alternatively, run:
+> ```bash
+> xattr -dr com.apple.quarantine "FitGirl Downloader.app"
+> ```
+
+### Build from Source
 1. Install requirements: `pip install -r requirements.txt pillow`
 2. Run the build script for your OS:
    - **Windows**: Run `build.bat`

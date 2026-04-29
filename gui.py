@@ -230,12 +230,12 @@ class FitGirlDownloaderApp:
         btn_actions_frame = ttk.Frame(self.info_frame)
         btn_actions_frame.grid(row=5, column=1, sticky=tk.W, pady=(5, 0))
         
-        self.btn_queue = ttk.Button(btn_actions_frame, text="Add to Queue", command=self.add_to_queue, state=tk.DISABLED)
-        self.btn_queue.pack(side=tk.LEFT, padx=(0, 5))
-        
-        torrent_label = "⚡ Torrent Download" if HAS_LIBTORRENT else "Download via Torrent"
+        torrent_label = "⚡ Download" if HAS_LIBTORRENT else "Torrent Download"
         self.btn_torrent = ttk.Button(btn_actions_frame, text=torrent_label, command=self.download_torrent, state=tk.DISABLED)
-        self.btn_torrent.pack(side=tk.LEFT)
+        self.btn_torrent.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.btn_queue = ttk.Button(btn_actions_frame, text="Queue HTTP Links", command=self.add_to_queue, state=tk.DISABLED)
+        self.btn_queue.pack(side=tk.LEFT)
 
         self.txt_desc = tk.Text(self.info_frame, wrap=tk.WORD, height=4, width=40, font=('Helvetica', 9))
         self.txt_desc.grid(row=6, column=0, columnspan=3, pady=(10, 0), sticky=tk.EW)

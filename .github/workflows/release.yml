@@ -32,7 +32,7 @@ jobs:
           if (Test-Path dist) { Compress-Archive -Path dist\"FitGirl Downloader\"\* -DestinationPath dist\windows\fitgirl-downloader-windows.zip -Force }
         id: zip
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-artifact
           path: dist\windows\fitgirl-downloader-windows.zip
@@ -57,7 +57,7 @@ jobs:
           mkdir -p dist/mac
           tar -czf dist/mac/fitgirl-downloader-macos.zip -C dist "FitGirl Downloader"
       - name: Upload Mac Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-artifact
           path: dist/mac/fitgirl-downloader-macos.zip
@@ -84,7 +84,7 @@ jobs:
           mkdir -p dist/linux
           tar -czf dist/linux/fitgirl-downloader-linux.tar.gz -C dist "FitGirl Downloader"
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
           path: dist/linux/fitgirl-downloader-linux.tar.gz

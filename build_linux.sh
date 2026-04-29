@@ -9,7 +9,7 @@ then
 fi
 
 # Run PyInstaller
-pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
+pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
 
 echo ""
 echo "Build complete! Your Linux executable is located in the 'dist' folder."

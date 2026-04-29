@@ -62,7 +62,7 @@ Pre-built binaries are available for every release — no Python required.
 Head to the [Releases](../../releases/latest) page and download the archive for your OS:
 - **Windows**: `fitgirl-downloader-windows.zip` → extract and run `FitGirl Downloader.exe`
 - **macOS**: `fitgirl-downloader-macos.zip` → extract and open `FitGirl Downloader.app`
-- **Linux**: `fitgirl-downloader-linux.tar.gz` → extract and run `FitGirl Downloader`
+- **Linux**: `fitgirl-downloader-linux.tar.gz` → extract and run `FitGirl Downloader`, or grab `fitgirl-downloader.AppImage` → `chmod +x` and run
 
 > **macOS note**: The app is ad-hoc signed (no Apple Developer certificate). On first launch, right-click → **Open** to bypass the Gatekeeper warning. Alternatively, run:
 > ```bash

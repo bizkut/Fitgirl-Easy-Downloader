@@ -181,6 +181,9 @@ class FitGirlDownloaderApp:
                 default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
                 os.makedirs(default_dir, exist_ok=True)
                 self.config_manager.set_download_dir(default_dir)
+        # Refresh label immediately so first-run selection is visible
+        if hasattr(self, 'lbl_download_dir'):
+            self.lbl_download_dir.config(text=f"Download Dir: {self.config_manager.get_download_dir()}")
 
     def setup_ui(self):
         main_frame = ttk.Frame(self.root, padding="10")

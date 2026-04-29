@@ -25,7 +25,7 @@ jobs:
           pip install -r requirements.txt pillow
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img;img" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --onefile --windowed --add-data "img;img" --icon "img\icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Zip Windows Build
         shell: pwsh
         run: |
@@ -53,7 +53,7 @@ jobs:
           pip install -r requirements.txt pillow
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Ad-hoc sign and zip macOS app
         run: |
           codesign --force --deep --sign - "dist/FitGirl Downloader.app"
@@ -76,21 +76,55 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip tar
+          sudo apt-get install -y zip tar wget
           python -m pip install --upgrade pip
           pip install -r requirements.txt pillow
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (onefile)
         run: |
-          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --icon "img/icon.jpg" --name "FitGirl Downloader" gui.py
       - name: Tar Linux Build
         run: |
           mkdir -p dist/linux
           tar -czf dist/linux/fitgirl-downloader-linux.tar.gz -C dist "FitGirl Downloader"
-      - name: Upload Linux Artifact
+      - name: Build with PyInstaller (onedir for AppImage)
+        run: |
+          pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --icon "img/icon.jpg" --distpath dist_onedir --name "FitGirl Downloader" gui.py
+      - name: Create AppImage
+        run: |
+          wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+
+          mkdir -p AppDir/usr/bin
+          cp -r dist_onedir/FitGirl\ Downloader/* AppDir/usr/bin/
+
+          mkdir -p AppDir/usr/share/applications
+          cat > AppDir/usr/share/applications/fitgirl-downloader.desktop <<'EOF'
+          [Desktop Entry]
+          Name=FitGirl Downloader
+          Exec=FitGirl Downloader
+          Icon=icon
+          Type=Application
+          Categories=Network;
+          Terminal=false
+          EOF
+
+          python -c "from PIL import Image; img = Image.open('img/icon.jpg'); img.save('icon.png')"
+          mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
+          cp icon.png AppDir/usr/share/icons/hicolor/128x128/apps/icon.png
+
+          ln -s usr/bin/FitGirl\ Downloader AppDir/AppRun
+          ln -s usr/share/applications/fitgirl-downloader.desktop AppDir/fitgirl-downloader.desktop
+          ln -s usr/share/icons/hicolor/128x128/apps/icon.png AppDir/.DirIcon
+
+          mkdir -p dist/linux
+          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool-x86_64.AppImage AppDir dist/linux/fitgirl-downloader.AppImage
+      - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
-          path: dist/linux/fitgirl-downloader-linux.tar.gz
+          path: |
+            dist/linux/fitgirl-downloader-linux.tar.gz
+            dist/linux/fitgirl-downloader.AppImage
 
   release:
     needs: [build_windows, build_macos, build_linux]
@@ -122,3 +156,4 @@ jobs:
             ./windows/fitgirl-downloader-windows.zip
             ./macos/fitgirl-downloader-macos.zip
             ./linux/fitgirl-downloader-linux.tar.gz
+            ./linux/fitgirl-downloader.AppImage

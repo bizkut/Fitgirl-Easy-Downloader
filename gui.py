@@ -31,7 +31,17 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-CONFIG_FILE = "config.json"
+def _get_config_path():
+    if sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support/FitGirl Downloader")
+    elif sys.platform == "win32":
+        base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "FitGirl Downloader")
+    else:
+        base = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "fitgirl-downloader")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "config.json")
+
+CONFIG_FILE = _get_config_path()
 HEADERS = {
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'accept-language': 'en-US,en;q=0.5',
@@ -112,7 +122,6 @@ class FitGirlDownloaderApp:
         self.root.minsize(800, 600)
         
         self.config_manager = ConfigManager()
-        self.check_first_run()
         
         self.queue_items = {}
         self.current_download_id = None
@@ -135,6 +144,7 @@ class FitGirlDownloaderApp:
         
         # Load saved queue
         self.root.after(100, self.load_saved_queue)
+        self.root.after(200, self.check_first_run)
         
         # Start torrent status polling
         if self.torrent_manager:
@@ -165,7 +175,7 @@ class FitGirlDownloaderApp:
         else:
             if not self.config_manager.get_download_dir():
                 # If they cancelled and no dir is set, set a default
-                default_dir = os.path.join(os.getcwd(), "downloads")
+                default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
                 os.makedirs(default_dir, exist_ok=True)
                 self.config_manager.set_download_dir(default_dir)
 

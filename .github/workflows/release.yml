@@ -25,18 +25,13 @@ jobs:
           pip install -r requirements.txt pillow
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed --add-data "img;img" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --onefile --windowed --add-data "img;img" --name "FitGirl Downloader" gui.py
       - name: Zip Windows Build
         shell: pwsh
         run: |
-          if (Test-Path dist) {
-            $src = "dist\\FitGirl Downloader\\*"
-            $dstDir = "dist\\windows"
-            New-Item -ItemType Directory -Force -Path $dstDir
-            Compress-Archive -Path $src -DestinationPath "$dstDir\\fitgirl-downloader-windows.zip" -Force
-          } else {
-            Write-Host "Windows build folder not found, skipping zip."
-          }
+          $dstDir = "dist\\windows"
+          New-Item -ItemType Directory -Force -Path $dstDir
+          Compress-Archive -Path "dist\\FitGirl Downloader.exe" -DestinationPath "$dstDir\\fitgirl-downloader-windows.zip" -Force
         id: zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -58,11 +53,12 @@ jobs:
           pip install -r requirements.txt pillow
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
-      - name: Zip macOS Build
+          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
+      - name: Ad-hoc sign and zip macOS app
         run: |
+          codesign --force --deep --sign - "dist/FitGirl Downloader.app"
           mkdir -p dist/mac
-          tar -czf dist/mac/fitgirl-downloader-macos.zip -C dist "FitGirl Downloader"
+          cd dist && zip -r mac/fitgirl-downloader-macos.zip "FitGirl Downloader.app"
       - name: Upload Mac Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -85,7 +81,7 @@ jobs:
           pip install -r requirements.txt pillow
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
+          pyinstaller --noconfirm --onefile --windowed --add-data "img:img" --name "FitGirl Downloader" gui.py
       - name: Tar Linux Build
         run: |
           mkdir -p dist/linux

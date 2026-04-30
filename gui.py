@@ -837,11 +837,12 @@ class FitGirlDownloaderApp:
 
                     if total_links > 0:
                         resolve_part(0)
-                    if total_links > 1 and not self.abort_flag:
-                        resolve_part(total_links - 1)
 
                     if 0 in resolved_plans:
                         download_queue.put(resolved_plans.pop(0))
+
+                    if total_links > 1 and not self.abort_flag:
+                        resolve_part(total_links - 1)
 
                     for idx in range(1, max(total_links - 1, 1)):
                         if self.abort_flag:
@@ -922,18 +923,9 @@ class FitGirlDownloaderApp:
         last_size = batch_state.get('last_part_size') or part_sizes.get(total_parts, 0)
         if standard_size and last_size:
             return (standard_size * (total_parts - 1)) + last_size
-        if not standard_size:
-            return sum(part_sizes.values())
-
-        estimated_total = 0
-        for part_idx in range(1, total_parts + 1):
-            if part_idx in part_sizes:
-                estimated_total += part_sizes[part_idx]
-            elif part_idx == total_parts:
-                continue
-            else:
-                estimated_total += standard_size
-        return estimated_total
+        if standard_size:
+            return standard_size * total_parts
+        return sum(part_sizes.values())
 
     @staticmethod
     def _is_fuckingfast_total_estimate_ready(batch_state, total_parts):
@@ -941,7 +933,7 @@ class FitGirlDownloaderApp:
             return False
         if total_parts == 1:
             return batch_state.get('standard_part_size', 0) > 0 or batch_state.get('part_sizes', {}).get(1, 0) > 0
-        return batch_state.get('standard_part_size', 0) > 0 and batch_state.get('last_part_size', 0) > 0
+        return batch_state.get('standard_part_size', 0) > 0
 
     @staticmethod
     def _snapshot_fuckingfast_batch(batch_state):

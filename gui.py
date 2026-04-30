@@ -788,6 +788,7 @@ class FitGirlDownloaderApp:
                 'resolved_count': 0,
                 'part_sizes': {},
                 'standard_part_size': 0,
+                'last_part_size': 0,
                 'started_downloading': False,
                 'total_estimate_ready': False,
             }
@@ -808,14 +809,10 @@ class FitGirlDownloaderApp:
                                 batch_state['part_sizes'][part_idx] = plan_item['remote_size']
                                 if not batch_state['standard_part_size'] and (part_idx < total_links or total_links == 1):
                                     batch_state['standard_part_size'] = plan_item['remote_size']
+                                if part_idx == total_links:
+                                    batch_state['last_part_size'] = plan_item['remote_size']
                                 batch_state['total_size'] = self._estimate_fuckingfast_total_size(batch_state, total_links)
-                                batch_state['total_estimate_ready'] = (
-                                    total_links == 1 or
-                                    (
-                                        bool(batch_state['standard_part_size']) and
-                                        total_links in batch_state['part_sizes']
-                                    )
-                                )
+                                batch_state['total_estimate_ready'] = self._is_fuckingfast_total_estimate_ready(batch_state, total_links)
                                 existing_done = min(plan_item['existing_size'], plan_item['remote_size'])
                                 batch_state['downloaded'] += existing_done
                                 batch_state['session_start_downloaded'] += existing_done
@@ -922,6 +919,9 @@ class FitGirlDownloaderApp:
             return sum(part_sizes.values())
         if total_parts == 1:
             return part_sizes.get(1, standard_size)
+        last_size = batch_state.get('last_part_size') or part_sizes.get(total_parts, 0)
+        if standard_size and last_size:
+            return (standard_size * (total_parts - 1)) + last_size
         if not standard_size:
             return sum(part_sizes.values())
 
@@ -934,6 +934,14 @@ class FitGirlDownloaderApp:
             else:
                 estimated_total += standard_size
         return estimated_total
+
+    @staticmethod
+    def _is_fuckingfast_total_estimate_ready(batch_state, total_parts):
+        if total_parts <= 0:
+            return False
+        if total_parts == 1:
+            return batch_state.get('standard_part_size', 0) > 0 or batch_state.get('part_sizes', {}).get(1, 0) > 0
+        return batch_state.get('standard_part_size', 0) > 0 and batch_state.get('last_part_size', 0) > 0
 
     @staticmethod
     def _snapshot_fuckingfast_batch(batch_state):
@@ -967,6 +975,17 @@ class FitGirlDownloaderApp:
                 
             if total_size == 0:
                 total_size = int(response.headers.get('content-length', 0)) + downloaded
+            if total_size > 0:
+                with batch_lock:
+                    part_sizes = batch_state['part_sizes']
+                    if part_sizes.get(part_idx, 0) <= 0:
+                        part_sizes[part_idx] = total_size
+                        if not batch_state['standard_part_size'] and (part_idx < total_parts or total_parts == 1):
+                            batch_state['standard_part_size'] = total_size
+                        if part_idx == total_parts:
+                            batch_state['last_part_size'] = total_size
+                        batch_state['total_size'] = self._estimate_fuckingfast_total_size(batch_state, total_parts)
+                        batch_state['total_estimate_ready'] = self._is_fuckingfast_total_estimate_ready(batch_state, total_parts)
                 
             block_size = 8192
             start_time = time.time()
@@ -979,6 +998,10 @@ class FitGirlDownloaderApp:
                 return f"{size:.2f} PB"
                 
             def format_time(secs):
+                if secs is None:
+                    return "--:--"
+                if 0 < secs < 1:
+                    secs = 1
                 m, s = divmod(int(secs), 60)
                 h, m = divmod(m, 60)
                 if h > 0:
@@ -1012,11 +1035,11 @@ class FitGirlDownloaderApp:
                         if estimate_ready and batch_total_size > 0:
                             progress = (batch_downloaded / batch_total_size) * 100
                             remaining = max(batch_total_size - batch_downloaded, 0)
-                            eta = remaining / speed if speed > 0 else 0
+                            eta = remaining / speed if speed > 0 else None
                             size_text = f"{format_size(batch_downloaded)}/{format_size(batch_total_size)}"
                         else:
                             progress = 0
-                            eta = 0
+                            eta = None
                             size_text = f"{format_size(batch_downloaded)}/estimating total"
 
                         progress_text = f"[{part_idx}/{total_parts}] {progress:.0f}% | {size_text} | {format_size(speed)}/s | Total ETA {format_time(eta)}"

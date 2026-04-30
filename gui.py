@@ -789,6 +789,7 @@ class FitGirlDownloaderApp:
                 'part_sizes': {},
                 'standard_part_size': 0,
                 'started_downloading': False,
+                'total_estimate_ready': False,
             }
             self.root.after(0, lambda i=item_id, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing 1/{t}"))
 
@@ -808,6 +809,13 @@ class FitGirlDownloaderApp:
                                 if not batch_state['standard_part_size'] and (part_idx < total_links or total_links == 1):
                                     batch_state['standard_part_size'] = plan_item['remote_size']
                                 batch_state['total_size'] = self._estimate_fuckingfast_total_size(batch_state, total_links)
+                                batch_state['total_estimate_ready'] = (
+                                    total_links == 1 or
+                                    (
+                                        bool(batch_state['standard_part_size']) and
+                                        total_links in batch_state['part_sizes']
+                                    )
+                                )
                                 existing_done = min(plan_item['existing_size'], plan_item['remote_size'])
                                 batch_state['downloaded'] += existing_done
                                 batch_state['session_start_downloaded'] += existing_done
@@ -927,6 +935,15 @@ class FitGirlDownloaderApp:
                 estimated_total += standard_size
         return estimated_total
 
+    @staticmethod
+    def _snapshot_fuckingfast_batch(batch_state):
+        batch_downloaded = batch_state['downloaded']
+        batch_total_size = batch_state['total_size']
+        session_start_downloaded = batch_state['session_start_downloaded']
+        batch_start_time = batch_state['start_time']
+        estimate_ready = batch_state.get('total_estimate_ready', False)
+        return batch_downloaded, batch_total_size, session_start_downloaded, batch_start_time, estimate_ready
+
     def _resolve_fuckingfast_download(self, link, download_dir, idx):
         return resolve_fuckingfast_download(link, download_dir=download_dir, idx=idx)
 
@@ -977,10 +994,13 @@ class FitGirlDownloaderApp:
                     downloaded += len(data)
                     with batch_lock:
                         batch_state['downloaded'] += len(data)
-                        batch_downloaded = batch_state['downloaded']
-                        batch_total_size = batch_state['total_size']
-                        session_start_downloaded = batch_state['session_start_downloaded']
-                        batch_start_time = batch_state['start_time']
+                        (
+                            batch_downloaded,
+                            batch_total_size,
+                            session_start_downloaded,
+                            batch_start_time,
+                            estimate_ready
+                        ) = self._snapshot_fuckingfast_batch(batch_state)
                     
                     current_time = time.time()
                     if current_time - last_update_time > 0.5 or (total_size > 0 and downloaded == total_size):
@@ -989,20 +1009,15 @@ class FitGirlDownloaderApp:
                         transferred_this_session = batch_downloaded - session_start_downloaded
                         speed = transferred_this_session / elapsed_time if elapsed_time > 0 else 0
 
-                        if batch_total_size > 0:
+                        if estimate_ready and batch_total_size > 0:
                             progress = (batch_downloaded / batch_total_size) * 100
                             remaining = max(batch_total_size - batch_downloaded, 0)
                             eta = remaining / speed if speed > 0 else 0
                             size_text = f"{format_size(batch_downloaded)}/{format_size(batch_total_size)}"
-                        elif total_size > 0:
-                            progress = (downloaded / total_size) * 100
-                            remaining = max(total_size - downloaded, 0)
-                            eta = remaining / speed if speed > 0 else 0
-                            size_text = f"{format_size(downloaded)}/{format_size(total_size)}"
                         else:
                             progress = 0
                             eta = 0
-                            size_text = format_size(batch_downloaded)
+                            size_text = f"{format_size(batch_downloaded)}/estimating total"
 
                         progress_text = f"[{part_idx}/{total_parts}] {progress:.0f}% | {size_text} | {format_size(speed)}/s | Total ETA {format_time(eta)}"
                         self.root.after(0, lambda p=progress_text: self.queue_tree.exists(item_id) and self.queue_tree.set(item_id, "status", p))

@@ -10,11 +10,11 @@ import requests
 import webbrowser
 import shutil
 from io import BytesIO
-from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
+from ff_utils import HEADERS, extract_fuckingfast_links, extract_game_name, resolve_fuckingfast_download
 
 def _configure_libtorrent_dll_paths():
     if sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
@@ -62,12 +62,6 @@ def _get_config_path():
     return os.path.join(base, "config.json")
 
 CONFIG_FILE = _get_config_path()
-HEADERS = {
-    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'accept-language': 'en-US,en;q=0.5',
-    'referer': 'https://fitgirl-repacks.site/',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-}
 
 class ConfigManager:
     def __init__(self):
@@ -494,11 +488,7 @@ class FitGirlDownloaderApp:
             soup = BeautifulSoup(r.text, "html.parser")
             
             # Extract links
-            links = [
-                a["href"]
-                for a in soup.find_all("a", href=True)
-                if a["href"].startswith("https://fuckingfast.co/")
-            ]
+            links = extract_fuckingfast_links(soup)
             
             if not links:
                 self.root.after(0, lambda: messagebox.showerror("Error", "No fuckingfast.co links found on this page."))
@@ -507,9 +497,7 @@ class FitGirlDownloaderApp:
                 return
 
             # Extract info
-            entry_title = soup.find("h1", class_="entry-title")
-            game_name = entry_title.get_text().split("–")[0].split("-")[0].strip() if entry_title else "Unknown Game"
-            game_name = re.sub(r'[\\/*?:"<>|]', "", game_name).strip()
+            game_name = extract_game_name(soup, url=url, fallback="Unknown Game")
             
             entry_content = soup.find('div', class_='entry-content')
             img_url = None
@@ -919,47 +907,7 @@ class FitGirlDownloaderApp:
         return estimated_total
 
     def _resolve_fuckingfast_download(self, link, download_dir, idx):
-        response = requests.get(link, headers=HEADERS, timeout=30)
-        if response.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        meta_title = soup.find('meta', attrs={'name': 'title'})
-        file_name = meta_title['content'] if meta_title else f"part_{idx+1}.rar"
-        file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name).strip() or f"part_{idx+1}.rar"
-
-        download_url = None
-        for script in soup.find_all('script'):
-            if 'function download' in script.text:
-                match = re.search(r'window\.open\(["\'](https?://[^\s"\'\)]+)', script.text)
-                if match:
-                    download_url = match.group(1)
-                    break
-
-        if not download_url:
-            return None
-
-        output_path = os.path.join(download_dir, file_name)
-        file_mode = 'wb'
-        existing_size = 0
-
-        head_response = requests.head(download_url, headers=HEADERS, allow_redirects=True, timeout=15)
-        remote_size = int(head_response.headers.get('content-length', 0))
-
-        if os.path.exists(output_path):
-            existing_size = os.path.getsize(output_path)
-            if remote_size > 0 and existing_size < remote_size:
-                file_mode = 'ab'
-
-        return {
-            'download_url': download_url,
-            'output_path': output_path,
-            'file_name': file_name,
-            'file_mode': file_mode,
-            'existing_size': existing_size,
-            'remote_size': remote_size,
-            'part_idx': idx + 1,
-        }
+        return resolve_fuckingfast_download(link, download_dir=download_dir, idx=idx)
 
     def _download_file(self, download_url, output_path, mode, existing_size, total_size, item_id, part_idx, total_parts, batch_state, batch_lock):
         headers = HEADERS.copy()

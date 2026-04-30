@@ -12,6 +12,11 @@ Ensure you have the following installed before running the script :
 pip install -r requirements.txt
 ```
 
+For CLI-only usage, install the smaller dependency set instead:
+```bash
+pip install -r requirements-cli.txt
+```
+
 ## Usage
 
 ### Option 1: GUI Mode (Recommended)
@@ -29,8 +34,11 @@ The GUI includes a built-in torrent client powered by [libtorrent](https://libto
 - **Auto-seeding**: Seeds up to a configurable ratio (default 1.0x), then auto-stops.
 - **Internal-only torrent downloads**: `libtorrent==2.0.11` is installed and bundled for Windows, macOS, and Linux builds. Windows builds also include `libtorrent-windows-dll` for libtorrent's OpenSSL DLLs. If the torrent engine is missing, the app reports the dependency error instead of opening an external torrent client.
 
+#### FuckingFast Downloads
+The GUI starts downloading as soon as the first FuckingFast file is resolved, while the remaining links continue preparing in the background. For multi-part games, ETA is estimated from the first part size plus the actual last part size, then corrected as each file is resolved.
+
 ### Option 2: CLI All-in-One Command
-You can fetch links and start downloading immediately using `main.py`:
+You can fetch links and start downloading immediately using `main.py`. The CLI uses the same FitGirl/FuckingFast parser as the GUI, but keeps the original sequential terminal download flow:
 - **Fetch links only**:
   ```bash
   python main.py <game_url>
@@ -60,7 +68,7 @@ Pre-built binaries are available for every release — no Python required.
 
 ### Download (Recommended)
 Head to the [Releases](../../releases/latest) page and download the archive for your OS:
-- **Windows**: `fitgirl-downloader-windows.zip` → extract and run `FitGirl Downloader.exe`
+- **Windows**: `fitgirl-downloader-windows.zip` → extract the whole folder and run `FitGirl Downloader.exe`
 - **macOS**: `fitgirl-downloader-macos.zip` → extract and open `FitGirl Downloader.app`
 - **Linux**: `fitgirl-downloader-linux.tar.gz` → extract and run `FitGirl Downloader`, or grab `fitgirl-downloader.AppImage` → `chmod +x` and run
 
@@ -83,6 +91,7 @@ If a Windows build reports a libtorrent DLL load error, rebuild from a clean env
 ## Features
 - **Cross-platform GUI Application** with live queue management.
 - **Built-in Torrent Client**: Download via magnet links directly in the app — concurrent multi-torrent downloads with live speed, peers, ETA, and seed ratio.
+- **FuckingFast batch ETA**: Starts downloading while links are still being resolved and estimates multi-part totals from the first and last file sizes.
 - **Smart Resume**: Automatically skips downloaded files and resumes partially downloaded files via HTTP Range.
 - Fetches full Game Information, Thumbnail, and Descriptions.
 - Extracts links even from modern list-based layouts.

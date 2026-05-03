@@ -439,6 +439,7 @@ class FitGirlDownloaderApp:
                 self.queue_tree.delete(item_id)
                 self.save_queue()
                 self.on_tree_select(None)
+                self._update_action_buttons_state()
                 return
             
             # Regular download item

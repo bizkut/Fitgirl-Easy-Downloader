@@ -14,7 +14,13 @@ from bs4 import BeautifulSoup
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
-from ff_utils import HEADERS, extract_fuckingfast_links, extract_game_name, resolve_fuckingfast_download
+from ff_utils import (
+    HEADERS,
+    FuckingFastVerificationRequired,
+    extract_fuckingfast_links,
+    extract_game_name,
+    resolve_fuckingfast_download,
+)
 
 def _configure_libtorrent_dll_paths():
     if sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
@@ -490,12 +496,6 @@ class FitGirlDownloaderApp:
             
             # Extract links
             links = extract_fuckingfast_links(soup)
-            
-            if not links:
-                self.root.after(0, lambda: messagebox.showerror("Error", "No fuckingfast.co links found on this page."))
-                self.root.after(0, lambda: self.btn_fetch.config(state=tk.NORMAL))
-                self.root.after(0, self._update_action_buttons_state)
-                return
 
             # Extract info
             game_name = extract_game_name(soup, url=url, fallback="Unknown Game")
@@ -503,6 +503,7 @@ class FitGirlDownloaderApp:
             entry_content = soup.find('div', class_='entry-content')
             img_url = None
             genres = company = languages = orig_size = repack_size = "-"
+            description = "-"
             
             if entry_content:
                 img = entry_content.find('img')
@@ -527,8 +528,6 @@ class FitGirlDownloaderApp:
                 if m_rep: repack_size = m_rep.group(1).strip()
                 
                 # --- Improved Description Extraction ---
-                description = "-"
-                
                 # 1. Try to find su-spoiler-content anywhere in the page first
                 # Search across soup, not just entry_content, in case of weird nesting
                 for title_div in soup.find_all(['div', 'span'], class_='su-spoiler-title'):
@@ -724,6 +723,7 @@ class FitGirlDownloaderApp:
             return
 
         url = self.fetched_data.get('url')
+        links = self.fetched_data.get('links') or []
         magnet = self.fetched_data.get('magnet_link')
         
         # Check if in regular queue
@@ -734,7 +734,7 @@ class FitGirlDownloaderApp:
         if magnet and self.torrent_manager:
             in_torrent = any(item.get('magnet_link') == magnet for item in self.torrent_queue_items.values())
 
-        if in_regular:
+        if in_regular or not links:
             self.btn_queue.config(state=tk.DISABLED)
         else:
             self.btn_queue.config(state=tk.NORMAL)
@@ -801,6 +801,7 @@ class FitGirlDownloaderApp:
                     resolved_plans = {}
                     prepared_count = 0
                     prepare_failed = False
+                    verification_required = False
 
                     def record_plan(idx, plan_item):
                         nonlocal prepared_count, prepare_failed
@@ -827,6 +828,7 @@ class FitGirlDownloaderApp:
                         resolved_plans[idx] = plan_item
 
                     def resolve_part(idx):
+                        nonlocal verification_required
                         link = links[idx]
                         if self.abort_flag:
                             return
@@ -838,6 +840,10 @@ class FitGirlDownloaderApp:
                                 self.root.after(0, lambda i=item_id, c=prepared_count+1, t=total_links: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", f"Preparing {c}/{t}"))
                             plan_item = self._resolve_fuckingfast_download(link, download_dir, idx)
                             record_plan(idx, plan_item)
+                        except FuckingFastVerificationRequired as e:
+                            print(f"Browser verification required for {link}: {e}")
+                            verification_required = True
+                            record_plan(idx, None)
                         except Exception as e:
                             print(f"Error preparing {link}: {e}")
                             record_plan(idx, None)
@@ -849,13 +855,15 @@ class FitGirlDownloaderApp:
                         download_queue.put(resolved_plans.pop(0))
 
                     for idx in range(1, total_links):
-                        if self.abort_flag:
+                        if self.abort_flag or verification_required:
                             break
                         resolve_part(idx)
                         if idx in resolved_plans:
                             download_queue.put(resolved_plans.pop(idx))
 
-                    if prepare_failed:
+                    if verification_required:
+                        download_queue.put({'failed': True, 'reason': 'verification_required'})
+                    elif prepare_failed:
                         download_queue.put({'failed': True})
                 finally:
                     download_queue.put(None)
@@ -863,6 +871,7 @@ class FitGirlDownloaderApp:
             threading.Thread(target=prepare_downloads, daemon=True).start()
 
             failed = total_links == 0
+            failure_reason = None
             while True:
                 if self.abort_flag:
                     break
@@ -875,6 +884,7 @@ class FitGirlDownloaderApp:
                     break
                 if plan_item.get('failed'):
                     failed = True
+                    failure_reason = plan_item.get('reason')
                     break
 
                 if plan_item['remote_size'] > 0 and plan_item['existing_size'] >= plan_item['remote_size']:
@@ -903,8 +913,19 @@ class FitGirlDownloaderApp:
                     break
             
             if failed and not self.abort_flag:
-                item['status'] = 'Failed'
-                self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Failed"))
+                if failure_reason == 'verification_required':
+                    item['status'] = (
+                        "Browser verification required — use Torrent Download"
+                        if item.get('magnet_link')
+                        else "Browser verification required — open game page"
+                    )
+                    self.root.after(
+                        0,
+                        lambda i=item_id, current_item=item: self._mark_fuckingfast_verification_required(i, current_item)
+                    )
+                else:
+                    item['status'] = 'Failed'
+                    self.root.after(0, lambda i=item_id: self.queue_tree.exists(i) and self.queue_tree.set(i, "status", "Failed"))
                 self.save_queue()
             elif not self.abort_flag:
                 item['status'] = 'Completed'
@@ -916,6 +937,25 @@ class FitGirlDownloaderApp:
             self.root.after(0, lambda: self._set_current_download_text("Currently Downloading: None"))
             self.root.after(0, self._reset_progress_widgets)
             self.root.after(0, lambda: self.on_tree_select(None))
+
+    def _mark_fuckingfast_verification_required(self, item_id, item):
+        has_torrent = bool(item.get('magnet_link'))
+        if has_torrent:
+            status = "Browser verification required — use Torrent Download"
+            next_step = "Use Torrent Download for this game instead."
+        else:
+            status = "Browser verification required — open game page"
+            next_step = "Open the game page and download through your browser instead."
+
+        item['status'] = status
+        if self.queue_tree.exists(item_id):
+            self.queue_tree.set(item_id, "status", status)
+        self._update_action_buttons_state()
+        messagebox.showwarning(
+            "FuckingFast Browser Verification Required",
+            "FuckingFast now requires Cloudflare browser verification, so the direct "
+            f"download cannot start inside this app.\n\n{next_step}"
+        )
 
     def _set_current_download_text(self, text):
         if hasattr(self, 'lbl_current_download'):

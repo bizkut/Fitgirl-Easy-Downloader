@@ -14,6 +14,28 @@ HEADERS = {
 }
 
 
+class FuckingFastVerificationRequired(RuntimeError):
+    """Raised when FuckingFast requires a browser-based Cloudflare check."""
+
+
+def _is_cloudflare_challenge(response):
+    if response.headers.get('cf-mitigated', '').lower() == 'challenge':
+        return True
+
+    body = response.text.lower()
+    return response.status_code in (403, 429, 503) and (
+        '<title>just a moment...</title>' in body
+        or 'challenges.cloudflare.com' in body
+    )
+
+
+def _has_turnstile_download_gate(soup):
+    return soup.select_one(
+        '#cf-turnstile, .cf-turnstile, [name="cf-turnstile-response"], '
+        '[hx-vals*="cf-turnstile-response"]'
+    ) is not None
+
+
 def sanitize_filename(name, fallback="file"):
     cleaned = re.sub(r'[\\/*?:"<>|]', "_", name or "").strip()
     return cleaned or fallback
@@ -69,9 +91,17 @@ def extract_direct_download_url(soup):
 
 def resolve_fuckingfast_download(link, download_dir=None, idx=0, timeout=30, fetch_size=True):
     response = requests.get(link, headers=HEADERS, timeout=timeout)
+    if _is_cloudflare_challenge(response):
+        raise FuckingFastVerificationRequired(
+            "FuckingFast requires Cloudflare browser verification."
+        )
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, 'html.parser')
+    if _has_turnstile_download_gate(soup):
+        raise FuckingFastVerificationRequired(
+            "FuckingFast requires Turnstile browser verification."
+        )
     meta_title = soup.find('meta', attrs={'name': 'title'})
     file_name = sanitize_filename(
         meta_title['content'] if meta_title else f"part_{idx + 1}.rar",

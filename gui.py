@@ -699,22 +699,39 @@ class FitGirlDownloaderApp:
         self.fitgirl_lbl.config(image=photo)
         self.fitgirl_lbl.image = photo # Keep reference
 
+    @staticmethod
+    def _is_retryable_regular_status(status):
+        return status == 'Failed' or str(status).startswith('Browser verification required')
+
     def add_to_queue(self):
-        if self.fetched_data:
-            # Check for duplicates again just in case
-            url = self.fetched_data.get('url')
-            if any(item.get('url') == url for item in self.queue_items.values()):
+        if not self.fetched_data:
+            return
+
+        url = self.fetched_data.get('url')
+        existing_entry = next(
+            (
+                (item_id, item)
+                for item_id, item in self.queue_items.items()
+                if item.get('url') == url
+            ),
+            None
+        )
+
+        if existing_entry:
+            item_id, existing_item = existing_entry
+            if not self._is_retryable_regular_status(existing_item.get('status')):
                 messagebox.showinfo("Already in Queue", "This game is already in your download queue.")
                 return
-
+        else:
             item_id = self.queue_tree.insert("", tk.END, values=(self.fetched_data['name'], "Queued"))
-            # Make a copy to avoid reference issues
-            queue_data = self.fetched_data.copy()
-            queue_data['tree_id'] = item_id
-            queue_data['status'] = 'Queued'
-            self.queue_items[item_id] = queue_data
-            self.save_queue()
-            self._update_action_buttons_state()
+
+        queue_data = self.fetched_data.copy()
+        queue_data['tree_id'] = item_id
+        queue_data['status'] = 'Queued'
+        self.queue_items[item_id] = queue_data
+        self.queue_tree.item(item_id, values=(queue_data['name'], 'Queued'))
+        self.save_queue()
+        self._update_action_buttons_state()
 
     def _update_action_buttons_state(self):
         if not hasattr(self, 'fetched_data') or not self.fetched_data:
@@ -726,8 +743,12 @@ class FitGirlDownloaderApp:
         links = self.fetched_data.get('links') or []
         magnet = self.fetched_data.get('magnet_link')
         
-        # Check if in regular queue
-        in_regular = any(item.get('url') == url for item in self.queue_items.values())
+        # Failed or verification-blocked rows can be retried in place.
+        in_regular = any(
+            item.get('url') == url
+            and not self._is_retryable_regular_status(item.get('status'))
+            for item in self.queue_items.values()
+        )
         
         # Check if in torrent queue
         in_torrent = False

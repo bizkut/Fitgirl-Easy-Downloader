@@ -101,6 +101,66 @@ class FetchInfoTests(unittest.TestCase):
         app.btn_queue.config.assert_called_once_with(state="disabled")
         app.btn_torrent.config.assert_called_once_with(state="normal")
 
+    def test_fuckingfast_button_recovers_for_new_page_with_failed_queue_entry(self):
+        app = FitGirlDownloaderApp.__new__(FitGirlDownloaderApp)
+        app.btn_queue = MagicMock()
+        app.btn_torrent = MagicMock()
+        app.torrent_manager = MagicMock()
+        app.torrent_queue_items = {}
+        app.queue_items = {}
+        app.fetched_data = {
+            'url': 'https://fitgirl-repacks.site/no-fuckingfast/',
+            'links': [],
+            'magnet_link': 'magnet:?xt=urn:btih:no-links',
+        }
+
+        app._update_action_buttons_state()
+        app.btn_queue.config.assert_called_with(state="disabled")
+
+        alchemy_url = 'https://fitgirl-repacks.site/alchemy-factory/'
+        app.fetched_data = {
+            'url': alchemy_url,
+            'links': ['https://fuckingfast.co/alchemy-part-1'],
+            'magnet_link': 'magnet:?xt=urn:btih:alchemy',
+        }
+        app.queue_items = {
+            'failed-alchemy': {'url': alchemy_url, 'status': 'Failed'}
+        }
+
+        app._update_action_buttons_state()
+
+        app.btn_queue.config.assert_called_with(state="normal")
+
+    def test_fuckingfast_retry_reuses_failed_queue_row(self):
+        app = FitGirlDownloaderApp.__new__(FitGirlDownloaderApp)
+        app.queue_tree = MagicMock()
+        app.save_queue = MagicMock()
+        app._update_action_buttons_state = MagicMock()
+        alchemy_url = 'https://fitgirl-repacks.site/alchemy-factory/'
+        app.fetched_data = {
+            'url': alchemy_url,
+            'name': 'Alchemy Factory',
+            'links': ['https://fuckingfast.co/alchemy-part-1'],
+            'magnet_link': 'magnet:?xt=urn:btih:alchemy',
+        }
+        app.queue_items = {
+            'failed-alchemy': {
+                'url': alchemy_url,
+                'name': 'Alchemy Factory',
+                'status': 'Failed',
+            }
+        }
+
+        app.add_to_queue()
+
+        app.queue_tree.insert.assert_not_called()
+        self.assertEqual(app.queue_items['failed-alchemy']['status'], 'Queued')
+        self.assertEqual(app.queue_items['failed-alchemy']['links'], app.fetched_data['links'])
+        app.queue_tree.item.assert_called_once_with(
+            'failed-alchemy', values=('Alchemy Factory', 'Queued')
+        )
+        app.save_queue.assert_called_once_with()
+
 
 class FuckingFastVerificationTests(unittest.TestCase):
     def test_cloudflare_challenge_raises_browser_verification_error(self):
